@@ -28,4 +28,20 @@ public class WebClientConfig {
                 .responseTimeout(Duration.ofSeconds(3));
         return WebClient.builder().baseUrl(baseUrl).clientConnector(new ReactorClientHttpConnector(client)).build();
     }
+    @Bean
+    WebClient mapGeocodingWebClient(@Value("${integration.maps.geocoding-base-url}") String baseUrl,
+            @Value("${integration.maps.timeout-seconds:12}") int timeout) {
+        HttpClient client=HttpClient.create().option(ChannelOption.CONNECT_TIMEOUT_MILLIS,timeout*1000)
+                .responseTimeout(Duration.ofSeconds(timeout));
+        return WebClient.builder().baseUrl(baseUrl).defaultHeader("User-Agent","VoyageTravelAssistant/1.0")
+                .clientConnector(new ReactorClientHttpConnector(client)).build();
+    }
+    @Bean
+    WebClient mapPlacesWebClient(@Value("${integration.maps.places-base-url}") String baseUrl,
+            @Value("${integration.maps.places-timeout-seconds:7}") int timeout) {
+        HttpClient client=HttpClient.create().option(ChannelOption.CONNECT_TIMEOUT_MILLIS,timeout*1000)
+                .responseTimeout(Duration.ofSeconds(timeout));
+        return WebClient.builder().baseUrl(baseUrl).defaultHeader("User-Agent","VoyageTravelAssistant/1.0")
+                .clientConnector(new ReactorClientHttpConnector(client)).build();
+    }
 }

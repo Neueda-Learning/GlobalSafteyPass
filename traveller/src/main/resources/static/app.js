@@ -2,9 +2,12 @@ let authToken=localStorage.getItem("traveller_access_token")||"";
 const $=s=>document.querySelector(s);
 const money=n=>new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"}).format(n||0);
 const currencyMoney=(n,currency="USD")=>new Intl.NumberFormat("en-US",{style:"currency",currency:currency||"USD"}).format(n||0);
-const dayCount=date=>Math.ceil((new Date(`${date}T12:00:00`)-new Date())/86400000);
-let state={trips:[],dashboard:null,alerts:[],cards:[],transactions:[],cases:[]};
+let state={trips:[],dashboard:null,alerts:[],cards:[],transactions:[],cases:[],tripMoney:{}};
 let activeRecovery=null;
+let activeAtmMap=null;
+let activeAnalyticsMap=null;
+let currentAtms=[];
+let atmSearchInFlight=false;
 
 async function api(path,opt={}){
   const headers={"Content-Type":"application/json",...opt.headers};
@@ -37,14 +40,14 @@ const alertCard=a=>{
   if(status==="OPEN")return `<article class="fraud-alert-card alert-open">
     <div class="alert-status"><div><small>ACTION NEEDED</small><h3>Is this your payment?</h3></div><span>${a.riskLevel} RISK</span></div>
     ${alertPayment(a)}
-    <p>We paused to let you check the merchant, amount, location and time.</p>
+    <p>Check the payment details before you respond.</p>
     <div class="reason-summary"><b>Why we’re checking</b>${reasons.slice(0,3).map(r=>`<span>• ${r}</span>`).join("")}</div>
-    <div class="menu-actions alert-actions"><button onclick="resolveAlert('${a.id}','confirm')">Yes, it was me</button><button class="danger" onclick="resolveAlert('${a.id}','report')">No, report fraud</button><button class="light" onclick="resolveAlert('${a.id}','freeze-card')">Freeze card</button></div>
+    <div class="menu-actions alert-actions"><button onclick="resolveAlert('${a.id}','confirm')">This was me</button><button class="danger" onclick="resolveAlert('${a.id}','report')">Report fraud</button><button class="light" onclick="resolveAlert('${a.id}','freeze-card')">Freeze card</button></div>
   </article>`;
   if(status==="CONFIRMED_SAFE")return `<article class="fraud-alert-card alert-safe">
     <div class="resolved-alert-head"><div class="resolved-check">✓</div><div><small>REVIEW COMPLETE</small><h3>Confirmed as yours</h3></div></div>
     <div class="resolved-payment"><div><b>${a.merchantName}</b><small>${a.maskedCardNumber} · ${a.merchantCountry||"Location unavailable"}</small></div><strong>${currencyMoney(a.amount,a.currency)}</strong></div>
-    <p>No further action is needed. Your card remains available to use.</p>
+    <p>No action needed. Your card is ready to use.</p>
     ${reasons.length?`<details class="alert-explanation"><summary>Why we originally checked</summary><span>${reasons.join(" · ")}</span></details>`:""}
   </article>`;
   return `<article class="fraud-alert-card alert-incident">
@@ -88,49 +91,113 @@ async function createTrip(event){
       <div class="menu-actions"><button onclick="showJourney('${trip.id}')">Open journey</button><button class="light" onclick="runCheck('${trip.id}')">Run readiness check</button></div>`);
   }catch(e){toast(e.message);button.disabled=false;button.textContent="Create trip"}
 }
+window.openTripEditor=id=>{
+  const t=state.trips.find(x=>x.id===id);if(!t||t.status!=="PLANNED")return;
+  openSheet(`<button class="back" onclick="showJourney('${id}')">← Trip details</button>
+    <span class="eyebrow">EDIT PLANNED TRIP</span><h2>Update your trip</h2>
+    <form class="trip-form" id="editTripForm">
+      <label>DESTINATION COUNTRY<input name="destinationCountry" value="${escapeHtml(t.destinationCountry)}" required></label>
+      <label>CITY<input name="destinationCity" value="${escapeHtml(t.destinationCity)}"></label>
+      <div class="row"><label>START DATE<input name="startDate" type="date" min="${new Date().toISOString().slice(0,10)}" value="${t.startDate}" required></label>
+      <label>END DATE<input name="endDate" type="date" min="${new Date().toISOString().slice(0,10)}" value="${t.endDate}" required></label></div>
+      <div class="row"><label>BUDGET<input name="budget" type="number" min="0.01" step="0.01" value="${t.budget}" required></label>
+      <label>CURRENCY<input name="budgetCurrency" maxlength="3" value="${t.budgetCurrency}" pattern="[A-Za-z]{3}" required></label></div>
+      <label>PREFERRED CARD<select name="preferredCardId" required>${state.cards.filter(c=>c.status==="ACTIVE").map(c=>`<option value="${c.id}" ${c.id===t.preferredCardId?"selected":""}>${c.cardType} ${c.maskedCardNumber} · ${c.mainCurrency}</option>`).join("")}</select></label>
+      <button type="submit">Save trip changes</button>
+    </form>`);
+  $("#editTripForm").onsubmit=e=>updateTrip(e,id);
+};
+async function updateTrip(event,id){
+  event.preventDefault();const form=new FormData(event.currentTarget),payload=Object.fromEntries(form.entries());
+  payload.budget=Number(payload.budget);payload.budgetCurrency=payload.budgetCurrency.toUpperCase();
+  if(payload.endDate<payload.startDate){toast("End date must be on or after the start date");return}
+  const button=event.currentTarget.querySelector("button");button.disabled=true;button.textContent="Saving…";
+  try{await api(`/api/travel/trips/${id}`,{method:"PUT",body:JSON.stringify(payload)});await load();toast("Trip updated");showJourney(id)}
+  catch(e){toast(e.message);button.disabled=false;button.textContent="Save trip changes"}
+}
+window.confirmDeleteTrip=id=>{
+  const t=state.trips.find(x=>x.id===id);if(!t||t.status!=="PLANNED")return;
+  openSheet(`<button class="back" onclick="showJourney('${id}')">← Trip details</button><span class="eyebrow">DELETE PLANNED TRIP</span>
+    <h2>Delete ${escapeHtml(t.destinationCity||t.destinationCountry)}?</h2>
+    <p>This removes the travel plan, readiness results and saved cash plan. Card transactions are not affected.</p>
+    <div class="delete-warning"><b>${escapeHtml(t.destinationCity||t.destinationCountry)}, ${escapeHtml(t.destinationCountry)}</b><small>${t.startDate} — ${t.endDate}</small></div>
+    <button class="bank-danger" onclick="deleteTrip('${id}')">Delete trip</button><button class="bank-secondary" onclick="showJourney('${id}')">Keep trip</button>`);
+};
+window.deleteTrip=async id=>{
+  try{await api(`/api/travel/trips/${id}`,{method:"DELETE"});await load();toast("Planned trip deleted");activate("trips")}
+  catch(e){toast(e.message)}
+};
 
 async function load(){
   try{
+    updateGreeting();
     const {data:trips}=await api("/api/travel/trips");
     trips.sort((a,b)=>(a.status==="COMPLETED")-(b.status==="COMPLETED")||a.startDate.localeCompare(b.startDate));
     const focusTrip=trips.find(t=>t.status!=="COMPLETED"&&t.status!=="CANCELLED")||trips[0];
-    const [dashboard,{data:alerts},{data:cards},{data:transactions},{data:cases}]=await Promise.all([
+    const [dashboard,focusFx,{data:alerts},{data:cards},{data:transactions},{data:cases}]=await Promise.all([
       api(`/api/travel/trips/${focusTrip.id}/dashboard`),
+      api(`/api/travel/trips/${focusTrip.id}/exchange-rate?_=${Date.now()}`,{headers:{"Cache-Control":"no-cache"}}),
       api("/api/travel/alerts"),api("/api/travel/cards"),api("/api/travel/transactions"),api("/api/travel/cases")
     ]);
-    state={trips,dashboard,alerts,cards,transactions,cases};
     const upcoming=trips.filter(t=>t.status!=="COMPLETED"&&t.status!=="CANCELLED");
+    const tripMoney=Object.fromEntries(await Promise.all(upcoming.map(async t=>{
+      if(t.id===focusTrip.id)return [t.id,{dashboard,fx:focusFx}];
+      try{const [d,fx]=await Promise.all([api(`/api/travel/trips/${t.id}/dashboard`),api(`/api/travel/trips/${t.id}/exchange-rate?_=${Date.now()}`,{headers:{"Cache-Control":"no-cache"}})]);return [t.id,{dashboard:d,fx}]}
+      catch(e){return [t.id,null]}
+    })));
+    state={trips,dashboard,alerts,cards,transactions,cases,tripMoney};
     $("#trips").innerHTML=(upcoming.length?upcoming:trips).map(t=>`<article class="trip" role="button" tabindex="0" onclick="showJourney('${t.id}')">
       <span class="tag">${t.status}</span><span class="arrow">→</span>
       <h3>${t.destinationCity}, ${t.destinationCountry}</h3>
       <p>${t.startDate} — ${t.endDate} · ${money(t.budget)}</p>
+      ${state.tripMoney[t.id]?`<small class="trip-local">Remaining ${localRemaining(state.tripMoney[t.id].dashboard,state.tripMoney[t.id].fx)}</small>`:""}
     </article>`).join("");
     $("#spent").textContent=money(dashboard.spent);
-    $("#remaining").textContent=money(dashboard.remaining);
+    $("#remaining").innerHTML=`${money(dashboard.remaining)}<small>${localRemaining(dashboard,focusFx,true)}</small>`;
     $("#budget").textContent=money(dashboard.budget);
-    renderTravelToolkit();
     const failed=dashboard.recentTransactions.find(t=>t.status==="DECLINED"&&t.failureCode==="NETWORK_ERROR")||dashboard.recentTransactions.find(t=>t.status==="DECLINED");
     const featuredByHero=renderHomeAssistant(failed);
     $("#attentionSection").style.display=failed&&!featuredByHero?"block":"none";
     $("#paymentIssue").innerHTML=failed?`<div class="issue-card interrupted-home" onclick="paymentHelp('${failed.transactionId}')">
       <div class="issue-icon">!</div><div><small>PAYMENT INTERRUPTED</small><h3>Complete your ${failed.merchantName} payment</h3><p>${money(failed.billingAmount)} · We found the best next step</p></div><span class="chevron">→</span></div>`:"";
     const activeCases=cases.filter(c=>c.status!=="RESOLVED");
-    $("#caseTracking").innerHTML=activeCases.length?`<div class="section-head compact-head"><div><span class="eyebrow">BANK FOLLOW-UP</span><h2>Cases in progress</h2></div><button onclick="showCases()">View all</button></div>${activeCases.slice(0,1).map(caseCard).join("")}`:"";
+    const featuredCase=activeCases[0]||cases[0];
+    $("#caseTracking").innerHTML=featuredCase?`<div class="section-head compact-head"><div><span class="eyebrow">CASE TRACKING</span><h2>${activeCases.length?"In progress":"Recent case"}</h2></div><button onclick="showCases()">View all</button></div>${caseCard(featuredCase)}`:"";
     maybeShowFraudAlert();
   }catch(e){toast(e.message)}
 }
-const caseCard=c=>`<div class="case-card" onclick="showCase('${c.id}')" role="button"><div class="case-top"><span>${c.status.replaceAll("_"," ")}</span><b>${c.id}</b></div><h3>${c.title}</h3><p>${c.currentUpdate}</p><small>Updated ${new Date(c.updatedAt).toLocaleString()}</small><div class="case-progress"><i></i><i class="${c.status!=="SUBMITTED"?"done":""}"></i><i class="${c.status==="RESOLVED"?"done":""}"></i></div></div>`;
-window.showCases=()=>openSheet(`<button class="back" onclick="activate('home')">← Overview</button><span class="eyebrow">BANK CASE TRACKING</span><h2>Your support cases</h2><p>Follow what the bank is doing without calling for an update.</p>${state.cases.length?state.cases.map(caseCard).join(""):"<p>No support cases.</p>"}`);
+function localRemaining(d,fx,approx=false){
+  if(!fx?.rate||!fx.destinationCurrency)return approx?"":`${money(d.remaining)} USD`;
+  const local=Number(d.remaining)*Number(fx.rate);
+  return `${approx?"≈ ":""}${currencyMoney(local,fx.destinationCurrency)} ${fx.destinationCurrency}`;
+}
+function updateGreeting(){
+  const hour=new Date().getHours();
+  const greeting=hour<5?"Welcome back":hour<12?"Good morning":hour<18?"Good afternoon":"Good evening";
+  $("#welcomeTitle").innerHTML=`${greeting},<br>Jessie.`;
+}
+const caseCard=c=>`<div class="case-card ${c.status==="RESOLVED"?"case-resolved":""}" onclick="showCase('${c.id}')" role="button"><div class="case-top"><span>${c.status.replaceAll("_"," ")}</span><b>${c.id}</b></div><h3>${c.title}</h3><p>${c.currentUpdate}</p><small>Updated ${new Date(c.updatedAt).toLocaleString()}</small><div class="case-progress"><i></i><i class="${c.status!=="SUBMITTED"?"done":""}"></i><i class="${c.status==="RESOLVED"?"done":""}"></i></div></div>`;
+window.showCases=()=>{
+  const active=state.cases.filter(c=>c.status!=="RESOLVED"),closed=state.cases.filter(c=>c.status==="RESOLVED");
+  openSheet(`<button class="back" onclick="activate('home')">← Overview</button><span class="eyebrow">CASE TRACKING</span><h2>Bank cases</h2>
+    ${active.length?`<h3>In progress</h3>${active.map(caseCard).join("")}`:""}
+    ${closed.length?`<h3 class="case-section-title">Completed</h3>${closed.map(caseCard).join("")}`:""}
+    ${state.cases.length?"":"<p>No support cases.</p>"}`);
+};
 window.showCase=id=>{
   const c=state.cases.find(x=>x.id===id);if(!c)return;
-  openSheet(`<button class="back" onclick="showCases()">← All cases</button><span class="eyebrow">${c.type.replaceAll("_"," ")}</span><h2>${c.title}</h2><div class="case-reference"><small>CASE REFERENCE</small><b>${c.id}</b><span>${c.status.replaceAll("_"," ")}</span></div><div class="case-timeline"><div class="done"><b>Request received</b><small>${new Date(c.createdAt).toLocaleString()}</small></div><div class="${c.status!=="SUBMITTED"?"done":""}"><b>Bank review</b><small>${c.currentUpdate}</small></div><div class="${c.status==="RESOLVED"?"done":""}"><b>Resolution</b><small>${c.status==="RESOLVED"?"Completed":"We’ll update this step when the review is complete."}</small></div></div><button class="bank-secondary" onclick="activate('home')">Back to overview</button>`);
+  const fraud=c.type==="FRAUD_INVESTIGATION";
+  openSheet(`<button class="back" onclick="showCases()">← All cases</button><span class="eyebrow">${fraud?"FRAUD INVESTIGATION":c.type.replaceAll("_"," ")}</span><h2>${c.title}</h2><div class="case-reference"><small>CASE REFERENCE</small><b>${c.id}</b><span>${c.status.replaceAll("_"," ")}</span></div>
+    <div class="case-timeline">
+      <div class="done"><b>${fraud?"Fraud reported":"Request received"}</b><small>${new Date(c.createdAt).toLocaleString()}</small></div>
+      ${fraud?`<div class="done"><b>Payment protected</b><small>The payment was disputed and the card was secured.</small></div>`:""}
+      <div class="${c.status!=="SUBMITTED"?"done":""}"><b>Bank investigation</b><small>${c.status==="RESOLVED"?"Merchant and payment-network evidence reviewed.":c.currentUpdate}</small></div>
+      <div class="${c.status==="RESOLVED"?"done":""}"><b>Case outcome</b><small>${c.status==="RESOLVED"?c.currentUpdate:"We’ll notify you when the investigation is complete."}</small></div>
+    </div><button class="bank-secondary" onclick="activate('home')">Back to overview</button>`);
 };
 function renderHomeAssistant(failed){
   const next=state.trips.find(t=>t.status!=="COMPLETED"&&t.status!=="CANCELLED")||state.trips[0];
   if(!next)return false;
-  const days=dayCount(next.startDate),when=days>1?`in ${days} days`:days===1?"tomorrow":days===0?"today":"in progress";
-  $("#nextTripLabel").textContent=`${next.destinationCity||next.destinationCountry} ${when} · ${next.startDate}`;
-  $("#openNextTrip").onclick=()=>showJourney(next.id);
   const openAlert=state.alerts.find(a=>a.status==="OPEN");
   const preferred=state.cards.find(c=>c.id===next.preferredCardId);
   let title="Your trip plan is ready to review",detail="See card, currency and budget advice prepared for this journey.",button="Open travel plan",action=()=>showJourney(next.id),score=state.dashboard.readinessStatus==="READY"?"✓":"!";
@@ -141,26 +208,6 @@ function renderHomeAssistant(failed){
   $("#assistantAction").textContent=title;$("#readinessText").textContent=detail;$("#assistantButton").textContent=button;$("#score").textContent=score;$("#checkBtn").onclick=action;
   return Boolean(openAlert||failed);
 }
-function renderTravelToolkit(){
-  const next=state.trips.find(t=>t.status!=="COMPLETED"&&t.status!=="CANCELLED")||state.trips[0];
-  const preferred=next&&state.cards.find(c=>c.id===next.preferredCardId);
-  const location=next?(next.destinationCity||next.destinationCountry):"your next trip";
-  $("#travelToolkitContext").textContent=`Quick access for ${location}—without repeating items already shown in your next best action.`;
-  const cardTitle=preferred?(preferred.overseasPaymentsEnabled?"Preferred card is ready":"Finish setting up your preferred card"):"Choose a travel card";
-  const cardDetail=preferred?`${preferred.cardType} ${preferred.maskedCardNumber} · Overseas payments ${preferred.overseasPaymentsEnabled?"on":"off"}`:"Select a card and check destination currency support";
-  $("#travelActions").innerHTML=`
-    <button onclick="${preferred&&!preferred.overseasPaymentsEnabled?`enableTravelCard('${preferred.id}')`:"activate('profile')"}">
-      <b class="toolkit-icon">▣</b><span>${cardTitle}<small>${cardDetail}</small></span><i>→</i>
-    </button>
-    <button onclick="activate('transactions')">
-      <b class="toolkit-icon">↗</b><span>Payments &amp; cash<small>Track spending and recover interrupted payments</small></span><i>→</i>
-    </button>`;
-}
-window.enableTravelCard=async id=>{
-  try{await api(`/api/travel/cards/${id}/enable-overseas-payments`,{method:"POST"});await load();toast("Your preferred card is ready for overseas payments")}
-  catch(e){toast(e.message)}
-};
-
 async function runCheck(id="trip-tokyo"){
   try{
     const r=await api(`/api/travel/trips/${id}/readiness-check`,{method:"POST"});
@@ -204,36 +251,85 @@ window.selectJourneyCard=async(tripId,cardId)=>{
   const t=state.trips.find(x=>x.id===tripId);
   try{await api(`/api/travel/trips/${tripId}`,{method:"PUT",body:JSON.stringify({destinationCountry:t.destinationCountry,destinationCity:t.destinationCity,startDate:t.startDate,endDate:t.endDate,budget:t.budget,budgetCurrency:t.budgetCurrency,preferredCardId:cardId})});await load();toast("Preferred card updated");runCheck(tripId)}catch(e){toast(e.message)}
 };
-function showCurrencyGuidance(tripId,ruleCode="CURRENCY_UNKNOWN"){openSheet(`<button class="back" onclick="runCheck('${tripId}')">← Readiness check</button><span class="eyebrow">CURRENCY SUPPORT</span><h2>${ruleCode==="CURRENCY_NOT_SUPPORTED"?"This card does not support the destination currency":"Destination currency could not be verified"}</h2><p>Choose a compatible preferred card in Trip Details. If no suitable card is available, record that you will exchange cash after arrival.</p><div class="support-steps"><div class="support-step"><b>Switch preferred card</b><small>We will immediately refresh the rate and rerun readiness.</small></div><div class="support-step"><b>Plan cash exchange</b><small>This records a backup payment plan for your journey.</small></div></div><button class="bank-primary" onclick="showCardSolution('${tripId}','${ruleCode}')">Choose another card</button><button class="bank-secondary" onclick="planCashExchange('${tripId}')">I’ll exchange cash after arrival</button>`)};
-window.planCashExchange=async tripId=>{
-  try{await api(`/api/travel/trips/${tripId}/cash-exchange-plan`,{method:"POST"});await load();toast("Cash exchange plan saved");runCheck(tripId)}catch(e){toast(e.message)}
+function showCurrencyGuidance(tripId,ruleCode="CURRENCY_UNKNOWN"){openSheet(`<button class="back" onclick="runCheck('${tripId}')">← Readiness check</button><span class="eyebrow">BACKUP PAYMENT</span><h2>${ruleCode==="CURRENCY_NOT_SUPPORTED"?"Card currency not supported":"Rate unavailable"}</h2><p>Change card or find a nearby ATM.</p><button class="bank-primary" onclick="showCardSolution('${tripId}','${ruleCode}')">Change card</button><button class="bank-secondary" onclick="planCashExchange('${tripId}')">Find nearby ATMs</button>`)};
+window.planCashExchange=tripId=>{
+  const trip=state.trips.find(t=>t.id===tripId);if(!trip)return;
+  openSheet(`<button class="back" onclick="showJourney('${tripId}')">← Trip details</button><span class="eyebrow">ATM FINDER</span><h2>Find an ATM</h2>
+    <p>Search near an address, airport or hotel.</p>
+    <div class="atm-search"><label>FIND NEARBY ATMS</label><div><input id="atmLocationQuery" value="${trip.destinationCity||trip.destinationCountry}, ${trip.destinationCountry}" onkeydown="if(event.key==='Enter'){event.preventDefault();searchNearbyAtms('${tripId}')}"><button id="atmSearchButton" type="button" onclick="searchNearbyAtms('${tripId}')">Search</button></div><button class="location-button" type="button" onclick="useCurrentLocationForAtms('${tripId}')">◎ Use my location</button></div>
+    <div id="atmMap" class="atm-map"><div>Search a location to view nearby ATMs</div></div>
+    <div id="atmResults" class="atm-results"><div class="atm-empty">Enter an address, airport or hotel above.</div></div>`);
 };
-
+window.searchNearbyAtms=async tripId=>{
+  if(atmSearchInFlight)return;
+  const query=$("#atmLocationQuery")?.value.trim();if(!query)return;
+  atmSearchInFlight=true;const button=$("#atmSearchButton");if(button){button.disabled=true;button.textContent="Searching…"}
+  setAtmLoading("Finding this location…");
+  try{
+    const location=await api(`/api/travel/maps/geocode?q=${encodeURIComponent(query)}`);
+    await loadNearbyAtms(location.latitude,location.longitude,location.label);
+  }catch(e){showAtmError(e.message==="Unexpected server error"?"Location search is temporarily unavailable. Please try again.":e.message)}
+  finally{atmSearchInFlight=false;if(button){button.disabled=false;button.textContent="Search"}}
+};
+window.useCurrentLocationForAtms=tripId=>{
+  if(!navigator.geolocation){showAtmError("Location access is not available.");return}
+  setAtmLoading("Getting your location…");
+  navigator.geolocation.getCurrentPosition(
+    p=>loadNearbyAtms(p.coords.latitude,p.coords.longitude,"Current location"),
+    ()=>showAtmError("Location access was not allowed. Search an address instead."),
+    {enableHighAccuracy:true,timeout:10000,maximumAge:60000});
+};
+async function loadNearbyAtms(lat,lon,label){
+  try{
+    const result=await api(`/api/travel/maps/atms?lat=${lat}&lon=${lon}&radius=2500`);
+    currentAtms=result.atms||[];
+    renderAtmMap(lat,lon,result.atms);
+    $("#atmResults").innerHTML=result.atms.length?`<div class="atm-results-head"><b>${result.atms.length} near ${escapeHtml(shortPlace(label))}</b><small>Tap to view</small></div>${result.atms.slice(0,6).map(atmCard).join("")}`:`<div class="atm-empty">No mapped ATM found. Try another location.</div>`;
+  }catch(e){showAtmError("ATM search is temporarily unavailable. Please try again.")}
+}
+function atmCard(atm,index){
+  const distance=atm.distanceMeters<1000?`${atm.distanceMeters} m`:`${(atm.distanceMeters/1000).toFixed(1)} km`;
+  return `<button type="button" class="atm-result" onclick="selectAtmByIndex(${index})"><span><b>${escapeHtml(atm.name)}</b><small>${escapeHtml(atm.address)}${atm.openingHours?` · ${escapeHtml(atm.openingHours)}`:""}</small></span><strong>${distance}</strong></button>`;
+}
+function renderAtmMap(lat,lon,atms){
+  if(activeAtmMap){activeAtmMap.remove();activeAtmMap=null}
+  if(!window.L){$("#atmMap").innerHTML="<div>Map unavailable. ATM results are listed below.</div>";return}
+  $("#atmMap").innerHTML="";
+  activeAtmMap=L.map("atmMap",{zoomControl:false}).setView([lat,lon],14);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap contributors"}).addTo(activeAtmMap);
+  L.control.zoom({position:"bottomright"}).addTo(activeAtmMap);
+  L.circleMarker([lat,lon],{radius:8,color:"#0d6b4b",fillColor:"#d5f16b",fillOpacity:1,weight:3}).addTo(activeAtmMap).bindPopup("Search location");
+  atms.forEach(atm=>L.marker([atm.latitude,atm.longitude]).addTo(activeAtmMap).bindPopup(`<b>${escapeHtml(atm.name)}</b><br>${escapeHtml(atm.address)}`));
+}
+window.selectAtmByIndex=index=>{
+  const atm=currentAtms[index];if(!atm)return;
+  if(activeAtmMap)activeAtmMap.setView([atm.latitude,atm.longitude],16);
+  toast(`${atm.name} shown on map`);
+};
+function setAtmLoading(message){if($("#atmResults"))$("#atmResults").innerHTML=`<div class="atm-empty">${message}</div>`}
+function showAtmError(message){if($("#atmResults"))$("#atmResults").innerHTML=`<div class="atm-empty error">${escapeHtml(message)}</div>`}
+function shortPlace(label){return label.split(",").slice(0,3).join(",")}
+function escapeHtml(value){return String(value||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))}
 window.showJourney=async id=>{
   try{
     const trip=state.trips.find(t=>t.id===id),[d,fx]=await Promise.all([api(`/api/travel/trips/${id}/dashboard`),api(`/api/travel/trips/${id}/exchange-rate?_=${Date.now()}`,{headers:{"Cache-Control":"no-cache"}})]);
-    const card=state.cards.find(c=>c.id===trip.preferredCardId),used=Number(d.budgetUsagePercentage||0);
-    const budgetAdvice=used>100?"Spending is above the planned budget. Review recent purchases before using more funds.":used>75?"Most of the budget has been used. Keep a closer eye on the remaining days.":used>0?`${Math.round(used)}% of the budget has been used and ${money(d.remaining)} remains.`:"No spending yet. Your full travel budget is still available.";
-    const cardAdvice=fx.cardSupportsCurrency?`${card?.cardType||"Your card"} ${fx.maskedCardNumber} supports ${fx.destinationCurrency} and overseas payments are ${card?.overseasPaymentsEnabled?"enabled":"not enabled"}.`:`${card?.cardType||"Your card"} ${fx.maskedCardNumber} is not verified for this destination currency.`;
+    const remainingLocal=localRemaining(d,fx,true);
+    const planned=trip.status==="PLANNED";
     openSheet(`<button class="back" onclick="activate('trips')">← All journeys</button>
       <span class="eyebrow">${trip.status}</span><h2>${trip.destinationCity}, ${trip.destinationCountry}</h2>
       <p>${trip.startDate} — ${trip.endDate}</p>
-      <section class="assistant-brief"><span class="eyebrow">YOUR BANK’S TRAVEL ADVICE</span><h3>${d.activeFraudAlerts?"Review a security alert before spending":"Here’s what to know before you go"}</h3>
-        <div class="assistant-insight"><b>Preferred card</b><p>${cardAdvice}</p>${!fx.cardSupportsCurrency?`<button onclick="showCardSolution('${id}','CURRENCY_NOT_SUPPORTED')">Choose a better card →</button>`:card&&!card.overseasPaymentsEnabled?`<button onclick="cardAction('${card.id}','enable-overseas-payments')">Enable overseas payments →</button>`:""}</div>
-        <div class="assistant-insight"><b>Budget outlook</b><p>${budgetAdvice}</p>${d.transactionCount?`<button onclick="showJourneyPayments('${id}')">Review spending →</button>`:""}</div>
-        <div class="assistant-insight"><b>Pay like a local</b><p>Choose ${fx.destinationCurrency||"the local currency"} at the terminal. Avoid merchant currency conversion and keep a backup payment method.</p></div>
-      </section>
+      ${planned?`<div class="trip-manage"><button onclick="openTripEditor('${id}')">Edit trip</button><button class="danger-link" onclick="confirmDeleteTrip('${id}')">Delete</button></div>`:""}
       <div class="detail-grid">
         <div><small>BUDGET</small><strong>${money(d.budget)}</strong></div>
-        <div><small>REMAINING</small><strong>${money(d.remaining)}</strong></div>
+        <div><small>REMAINING</small><strong>${money(d.remaining)}<em>${remainingLocal}</em></strong></div>
         <div><small>SPENT</small><strong>${money(d.spent)}</strong></div>
         <div><small>TRANSACTIONS</small><strong>${d.transactionCount}</strong></div>
       </div>
-      <button class="budget-edit" onclick="openBudgetEditor('${id}')">Adjust travel budget <span>→</span></button>
+      ${planned?`<button class="budget-edit" onclick="openBudgetEditor('${id}')">Adjust travel budget <span>→</span></button>`:""}
       <div class="journey-fx ${fx.cardSupportsCurrency?"":"fx-warning"}"><div class="fx-top"><div><small>PREFERRED CARD · ${fx.maskedCardNumber}</small><strong>${fx.destinationCurrency&&fx.rate?`1 ${fx.cardCurrency} = ${Number(fx.rate).toFixed(4)} ${fx.destinationCurrency}`:"Rate unavailable"}</strong></div><button onclick="showJourney('${id}')">↻</button></div>
       <p>${fx.recommendation}${fx.rateDate?` · ${fx.estimated?"Reference fallback":`Live indicative rate from ${fx.provider}`} · ${fx.rateDate}`:""}</p>
-      ${!fx.destinationCurrencyVerified||!fx.cardSupportsCurrency?`<div class="menu-actions"><button onclick="showCardSolution('${id}','${fx.destinationCurrencyVerified?"CURRENCY_NOT_SUPPORTED":"CURRENCY_UNKNOWN"}')">Change card</button><button class="light" onclick="planCashExchange('${id}')">Plan cash exchange</button></div>`:""}</div>
-      <div class="menu-actions"><button onclick="runCheck('${id}')">Run readiness check</button><button class="light" onclick="showJourneyPayments('${id}')">View payments</button><button class="light" onclick="showCardSolution('${id}','CHANGE_CARD')">Change preferred card</button></div>
+      ${!fx.destinationCurrencyVerified||!fx.cardSupportsCurrency?`<div class="menu-actions"><button onclick="showCardSolution('${id}','${fx.destinationCurrencyVerified?"CURRENCY_NOT_SUPPORTED":"CURRENCY_UNKNOWN"}')">Change card</button><button class="light" onclick="planCashExchange('${id}')">Find an ATM</button></div>`:""}</div>
+      <div class="menu-actions">${planned?`<button onclick="runCheck('${id}')">Run readiness check</button>`:""}<button class="light" onclick="showJourneyPayments('${id}')">View payments</button>${planned?`<button class="light" onclick="showCardSolution('${id}','CHANGE_CARD')">Change preferred card</button>`:""}</div>
       <h3>Recent activity</h3>${d.recentTransactions.length?d.recentTransactions.slice(0,3).map(transactionRow).join(""):"<p>No transactions yet.</p>"}`);
   }catch(e){toast(e.message)}
 };
@@ -318,9 +414,46 @@ function activate(page){
   if(page==="payments")page="transactions";if(page==="security")page="profile";
   document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===page));
   if(page==="home"){$("#contentPage").classList.add("hidden");$("#homePage").classList.remove("hidden");$("#sheet").classList.add("hidden");$("#homePage").scrollTo({top:0,behavior:"smooth"});return}
-  if(page==="trips")openSheet(`<span class="eyebrow">YOUR JOURNEYS</span><h2>All journeys</h2><p>Select a journey to view readiness, budget and payments.</p><div class="menu-actions"><button onclick="openCreateTrip()">+ Create a trip</button></div>${state.trips.map(journeyCard).join("")}`);
+  if(page==="trips"){
+    const planned=state.trips.filter(t=>t.status==="PLANNED"||t.status==="ACTIVE");
+    const history=state.trips.filter(t=>t.status==="COMPLETED");
+    openSheet(`<span class="eyebrow">YOUR JOURNEYS</span><h2>My trips</h2><p>Plan what’s next and revisit previous destinations.</p>
+      <div class="menu-actions"><button onclick="openCreateTrip()">+ Create a trip</button></div>
+      <h3>Planned</h3>${planned.length?planned.map(journeyCard).join(""):"<p>No planned trips.</p>"}
+      ${history.length?`<details class="past-trips"><summary>Past trips <span>${history.length}</span></summary>${history.map(journeyCard).join("")}</details>`:""}`);
+  }
   if(page==="transactions")renderTransactionsPage();
   if(page==="profile")renderProfilePage();
+}
+const visitedCoordinates={
+  "Singapore":[1.3521,103.8198],"New York":[40.7128,-74.0060],"Barcelona":[41.3874,2.1686],
+  "Sydney":[-33.8688,151.2093],"Tokyo":[35.6762,139.6503],"Paris":[48.8566,2.3522],
+  "Toronto":[43.6532,-79.3832],"Nice":[43.7102,7.2620],"London":[51.5072,-0.1276],
+  "Japan":[36.2048,138.2529],"France":[46.2276,2.2137],"Canada":[56.1304,-106.3468],
+  "United States":[37.0902,-95.7129],"Spain":[40.4637,-3.7492],"Australia":[-25.2744,133.7751]
+};
+window.showTravelAnalytics=()=>{
+  const history=state.trips.filter(t=>t.status==="COMPLETED");
+  const countries=[...new Set(history.map(t=>t.destinationCountry))];
+  const worldPercent=(countries.length/195*100).toFixed(1);
+  openSheet(`<button class="back" onclick="activate('home')">← Overview</button>
+    <div class="analytics-title"><span class="eyebrow">YOUR TRAVEL STORY</span><h2>Analytics</h2><p>See how your past journeys are shaping your world.</p></div>
+    <div id="travelWorldMap" class="travel-world-map"><span>Loading your travel map…</span></div>
+    <div class="travel-metrics"><div><strong>${worldPercent}%</strong><small>OF THE WORLD</small></div><div><strong>${history.length}</strong><small>TRIPS</small></div><div><strong>${countries.length}</strong><small>COUNTRIES</small></div></div>
+    <h3>Travel history</h3>${history.length?history.sort((a,b)=>b.endDate.localeCompare(a.endDate)).map(t=>`<button class="history-row" onclick="showJourney('${t.id}')"><span><b>${escapeHtml(t.destinationCity||t.destinationCountry)}</b><small>${escapeHtml(t.destinationCountry)} · ${t.startDate.slice(0,4)}</small></span><i>→</i></button>`).join(""):"<div class=\"atm-empty\">Complete a trip to start your travel map.</div>"}`);
+  renderTravelWorldMap(history);
+};
+function renderTravelWorldMap(history){
+  if(activeAnalyticsMap){activeAnalyticsMap.remove();activeAnalyticsMap=null}
+  if(!window.L){$("#travelWorldMap").innerHTML="<span>Map unavailable.</span>";return}
+  $("#travelWorldMap").innerHTML="";
+  activeAnalyticsMap=L.map("travelWorldMap",{zoomControl:false,minZoom:1,maxZoom:5,worldCopyJump:true,attributionControl:true}).setView([18,8],1);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:5,attribution:"© OpenStreetMap contributors"}).addTo(activeAnalyticsMap);
+  history.forEach(t=>{
+    const point=visitedCoordinates[t.destinationCity]||visitedCoordinates[t.destinationCountry];if(!point)return;
+    L.circleMarker(point,{radius:8,color:"#0d6b4b",weight:3,fillColor:"#d5f16b",fillOpacity:1})
+      .addTo(activeAnalyticsMap).bindPopup(`<b>${escapeHtml(t.destinationCity||t.destinationCountry)}</b><br>${escapeHtml(t.destinationCountry)} · ${t.startDate.slice(0,4)}`);
+  });
 }
 function renderTransactionsPage(){
   const approved=state.transactions.filter(t=>t.status==="APPROVED"&&t.transactionType!=="REFUND"),declined=state.transactions.filter(t=>t.status==="DECLINED");
@@ -452,9 +585,10 @@ window.cardAction=async(id,action)=>{
   try{await api(`/api/travel/cards/${id}/${action}`,{method:"POST"});toast("Card settings updated");await load();activate("security")}catch(e){toast(e.message)}
 };
 function showAlerts(){
-  const open=state.alerts.filter(a=>a.status==="OPEN"),resolved=state.alerts.filter(a=>a.status!=="OPEN");
-  openSheet(`<button class="back" onclick="activate('home')">← Overview</button><span class="eyebrow">CARD SECURITY</span><h2>${open.length?"Payments to confirm":"You’re all caught up"}</h2>
-    <p class="security-intro">${open.length?`Check ${open.length} payment${open.length>1?"s":""}. We’ll only ask you to act on activity that still needs a decision.`:"There are no payments waiting for your confirmation."}</p>
+  const open=state.alerts.filter(a=>a.status==="OPEN");
+  const resolved=state.alerts.filter(a=>["CONFIRMED_SAFE","CARD_FROZEN","CLOSED"].includes(a.status));
+  openSheet(`<button class="back" onclick="activate('home')">← Overview</button><span class="eyebrow">CARD SECURITY</span><h2>${open.length?"Check a payment":"You’re all caught up"}</h2>
+    <p class="security-intro">${open.length?`${open.length} payment${open.length>1?"s":""} need${open.length===1?"s":""} your response.`:"Nothing needs your attention."}</p>
     ${open.length?`<section class="alert-group"><span class="eyebrow">NEEDS YOUR RESPONSE</span>${open.map(alertCard).join("")}</section>`:`<div class="security-clear"><span>✓</span><b>No action needed</b><small>We’ll notify you if a payment needs checking.</small></div>`}
     ${resolved.length?`<section class="alert-group resolved-group"><div class="resolved-group-title"><span class="eyebrow">PAST REVIEWS</span><small>${resolved.length} record${resolved.length>1?"s":""}</small></div>${resolved.map(alertCard).join("")}</section>`:""}`);
 }
@@ -497,11 +631,10 @@ if(fraudDemo)fraudDemo.onclick=async()=>{
   }catch(e){toast(e.message)}finally{button.classList.remove("loading")}
 };
 const swagger=$("#swagger");if(swagger)swagger.onclick=()=>location.href="/swagger-ui.html";
-$("#securityActivity").onclick=showAlerts;
-$("#trackCases").onclick=showCases;
 $("#close").onclick=()=>activate("home");
 $("#refresh").onclick=async()=>{await load();toast("Journeys refreshed")};
 $("#createTrip").onclick=openCreateTrip;
+$("#headerAnalytics").onclick=showTravelAnalytics;
 
 let authChallenge="";
 let pendingStepUp=null;
@@ -550,6 +683,7 @@ window.showPinEntry=()=>{$("#authBody").innerHTML=`<button class="auth-link" onc
 window.sendSmsCode=async()=>{try{const sms=await api(`/api/auth/sms?challengeId=${authChallenge}`,{method:"POST"});$("#authBody").innerHTML=`<button class="auth-link" onclick="restartAuth()">← Back</button><h2>Enter text message code</h2><p>Code sent to ${sms.maskedPhone}. Demo code: <b>${sms.demoCode}</b></p><div class="auth-code"><input id="smsCode" maxlength="6" inputmode="numeric" autocomplete="one-time-code"></div><button class="bank-primary" onclick="verifyAuth('SMS_OTP',$('#smsCode').value)">Verify code</button>`}catch(e){toast(e.message)}};
 window.restartAuth=()=>{$("#authBody").innerHTML=`<h2>Welcome back</h2><p>Verify your identity to open Travel Assistant.</p><label class="auth-label">CUSTOMER ID<input id="authCustomer" value="customer-001"></label><button class="bank-primary" id="authStart">Continue securely</button>`;$("#authStart").onclick=startAuth};
 window.signOut=async()=>{try{if(authToken)await api("/api/auth/logout",{method:"POST"})}catch(e){}showAuth();restartAuth()};
-$(".avatar").onclick=signOut;
 $("#authStart").onclick=startAuth;
+updateGreeting();
+setInterval(updateGreeting,60000);
 (async()=>{if(!authToken){showAuth();return}try{await api("/api/auth/session");$("#authGate").classList.add("hidden");load()}catch(e){showAuth()}})();

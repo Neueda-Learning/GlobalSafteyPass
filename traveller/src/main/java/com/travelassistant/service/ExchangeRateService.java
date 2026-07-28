@@ -12,7 +12,8 @@ public class ExchangeRateService {
     private static final Logger log=LoggerFactory.getLogger(ExchangeRateService.class);
     private static final Map<String,BigDecimal> USD_REFERENCE=Map.of(
             "USD",BigDecimal.ONE,"JPY",new BigDecimal("149.25"),"EUR",new BigDecimal("0.92"),
-            "SGD",new BigDecimal("1.35"),"GBP",new BigDecimal("0.79"),"CNY",new BigDecimal("7.24"));
+            "SGD",new BigDecimal("1.35"),"GBP",new BigDecimal("0.79"),"CNY",new BigDecimal("7.24"),
+            "CAD",new BigDecimal("1.38"));
     private final ExchangeRateProvider provider; private final ConcurrentHashMap<String,ExchangeRateQuote> cache=new ConcurrentHashMap<>();
     public ExchangeRateService(ExchangeRateProvider p){this.provider=p;}
     public ExchangeRateQuote rate(String source,String target,LocalDate date){
