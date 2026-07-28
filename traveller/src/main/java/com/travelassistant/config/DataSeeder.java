@@ -96,6 +96,22 @@ public class DataSeeder {
                 LocalDate.of(2024,4,15),LocalDate.of(2024,4,22),new BigDecimal("2100"),"USD","card-001",Enums.TripStatus.COMPLETED));
         if(!trips.existsById("trip-sydney"))trips.save(trip("trip-sydney","customer-001","Australia","Sydney",
                 LocalDate.of(2023,12,2),LocalDate.of(2023,12,11),new BigDecimal("3600"),"USD","card-001",Enums.TripStatus.COMPLETED));
+        if(!trips.existsById("trip-rome-history"))trips.save(trip("trip-rome-history","customer-001","Italy","Rome",
+                LocalDate.of(2023,5,10),LocalDate.of(2023,5,18),new BigDecimal("2600"),"USD","card-001",Enums.TripStatus.COMPLETED));
+        if(!trips.existsById("trip-dubai-history"))trips.save(trip("trip-dubai-history","customer-001","United Arab Emirates","Dubai",
+                LocalDate.of(2022,11,3),LocalDate.of(2022,11,9),new BigDecimal("3100"),"USD","card-001",Enums.TripStatus.COMPLETED));
+        if(!trips.existsById("trip-cape-town-history"))trips.save(trip("trip-cape-town-history","customer-001","South Africa","Cape Town",
+                LocalDate.of(2022,3,12),LocalDate.of(2022,3,22),new BigDecimal("2800"),"USD","card-001",Enums.TripStatus.COMPLETED));
+        if(!trips.existsById("trip-rio-history"))trips.save(trip("trip-rio-history","customer-001","Brazil","Rio de Janeiro",
+                LocalDate.of(2021,9,5),LocalDate.of(2021,9,14),new BigDecimal("2400"),"USD","card-001",Enums.TripStatus.COMPLETED));
+        if(!trips.existsById("trip-vancouver-history"))trips.save(trip("trip-vancouver-history","customer-001","Canada","Vancouver",
+                LocalDate.of(2021,2,18),LocalDate.of(2021,2,25),new BigDecimal("2100"),"USD","card-001",Enums.TripStatus.COMPLETED));
+        if(!trips.existsById("trip-bangkok-history"))trips.save(trip("trip-bangkok-history","customer-001","Thailand","Bangkok",
+                LocalDate.of(2020,8,2),LocalDate.of(2020,8,10),new BigDecimal("1900"),"USD","card-001",Enums.TripStatus.COMPLETED));
+        if(!trips.existsById("trip-reykjavik-history"))trips.save(trip("trip-reykjavik-history","customer-001","Iceland","Reykjavik",
+                LocalDate.of(2019,12,7),LocalDate.of(2019,12,13),new BigDecimal("2700"),"USD","card-001",Enums.TripStatus.COMPLETED));
+        if(!trips.existsById("trip-mexico-city-history"))trips.save(trip("trip-mexico-city-history","customer-001","Mexico","Mexico City",
+                LocalDate.of(2019,4,20),LocalDate.of(2019,4,27),new BigDecimal("1800"),"USD","card-001",Enums.TripStatus.COMPLETED));
     }
     private void seedOpenAlert(FraudAlertRepository alerts){
         if(!alerts.existsById("alert-review-pending"))alerts.save(FraudAlert.builder().id("alert-review-pending")

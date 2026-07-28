@@ -25,11 +25,16 @@
 <main class="phone">
   <div id="homePage" class="app-page">
   <header><div><span class="eyebrow">YOUR TRAVEL ASSISTANT</span><h1 id="welcomeTitle">Good evening,<br>Jessie.</h1></div>
-    <button id="headerAnalytics" class="header-analytics" type="button" aria-label="Open travel analytics">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg><span>Analytics</span>
-    </button>
+    <div class="header-shortcuts" aria-label="Travel shortcuts">
+      <button id="headerAnalytics" class="header-shortcut" type="button" aria-label="Open travel map">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg><span>Map</span>
+      </button>
+      <button id="headerAtms" class="header-shortcut" type="button" aria-label="Find nearby ATMs">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 10h18M7 15h4"/></svg><span>ATMs</span>
+      </button>
+    </div>
   </header>
-  <section class="hero">
+  <section id="nextBestAction" class="hero" hidden>
     <div class="hero-top"><div><span class="label">YOUR NEXT BEST ACTION</span><strong id="assistantAction">Preparing your travel advice…</strong></div><div id="ring" class="ring"><span id="score">—</span></div></div>
     <p id="readinessText">We’re reviewing your cards, payments and travel plan.</p>
     <button id="checkBtn" class="primary"><span id="assistantButton">Review recommendation</span><span>→</span></button>
