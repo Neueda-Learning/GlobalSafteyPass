@@ -23,8 +23,9 @@ services:
       DATABASE_URL: jdbc:mysql://mysql:3306/travel_assistant?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       DATABASE_USERNAME: travel_user
       DATABASE_PASSWORD: travel_password
-      FX_API_BASE_URL: https://api.frankfurter.app
+      FX_API_BASE_URL: https://api.frankfurter.dev/v1
       FX_API_ENABLED: "true"
+      INTEGRATION_MAPS_PLACES_TIMEOUT_SECONDS: "3"
     depends_on:
       mysql:
         condition: service_healthy

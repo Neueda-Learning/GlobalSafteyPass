@@ -17,7 +17,7 @@ public class DataSeeder {
             if(cards.count()>0){
                 configureCardCurrencies(cards);
                 if(!trips.existsById("trip-expired-card"))trips.save(trip("trip-expired-card","customer-001","France","Nice",LocalDate.of(2026,10,2),LocalDate.of(2026,10,12),new BigDecimal("1900"),"USD","card-expiring",Enums.TripStatus.PLANNED));
-                seedFailureCases(txs);curateDemoData(trips,txs);seedOpenAlert(alerts);seedTrackingCase(cases);return;
+                seedTravelHistory(trips);seedFailureCases(txs);curateDemoData(trips,txs);seedOpenAlert(alerts);seedTrackingCase(cases);return;
             }
             accounts.save(Account.builder().id("account-001").customerId("customer-001").accountType("CHECKING").currency("USD").availableBalance(new BigDecimal("8500")).status(Enums.AccountStatus.ACTIVE).build());
             accounts.save(Account.builder().id("account-002").customerId("customer-001").accountType("SAVINGS").currency("USD").availableBalance(new BigDecimal("15000")).status(Enums.AccountStatus.ACTIVE).build());
@@ -37,6 +37,7 @@ public class DataSeeder {
             trips.save(trip("trip-expired-card","customer-001","France","Nice",LocalDate.of(2026,10,2),LocalDate.of(2026,10,12),new BigDecimal("1900"),"USD","card-expiring",Enums.TripStatus.PLANNED));
             trips.save(trip("trip-frozen-card","customer-001","Singapore","Singapore",LocalDate.of(2026,11,3),LocalDate.of(2026,11,10),new BigDecimal("2200"),"USD","card-frozen",Enums.TripStatus.PLANNED));
             trips.save(trip("trip-low-balance","customer-001","United Kingdom","London",LocalDate.of(2026,12,5),LocalDate.of(2026,12,12),new BigDecimal("3000"),"USD","card-backup",Enums.TripStatus.PLANNED));
+            seedTravelHistory(trips);
             saveTx(txs,"txn-hotel","trip-tokyo","Tokyo Hotel","Japan","HOTEL","420.00",Enums.TransactionStatus.APPROVED,null,Instant.parse("2026-08-12T13:30:00Z"),Enums.TransactionType.PURCHASE);
             saveTx(txs,"txn-dining","trip-tokyo","Sushi House","Japan","DINING","82.50",Enums.TransactionStatus.APPROVED,null,Instant.parse("2026-08-13T11:30:00Z"),Enums.TransactionType.PURCHASE);
             saveTx(txs,"txn-atm","trip-tokyo","Shibuya ATM","Japan","CASH","150.00",Enums.TransactionStatus.APPROVED,null,Instant.parse("2026-08-13T13:30:00Z"),Enums.TransactionType.ATM_WITHDRAWAL);
@@ -78,13 +79,39 @@ public class DataSeeder {
         if(!txs.existsById("txn-fraud-block"))saveTx(txs,"txn-fraud-block","trip-tokyo","Luxury Watch Store","Japan","LUXURY","2100.00",Enums.TransactionStatus.DECLINED,"FRAUD_BLOCK",Instant.parse("2026-08-17T08:40:00Z"),Enums.TransactionType.PURCHASE);
     }
     private void curateDemoData(TripRepository trips,TransactionRepository txs){
-        trips.deleteAllById(List.of("trip-singapore","trip-frozen-card","trip-low-balance"));
+        trips.deleteAllById(List.of("trip-frozen-card","trip-low-balance"));
         txs.deleteAllById(List.of("txn-decline-2","txn-overseas-off","txn-online-off","txn-atm-limit",
                 "txn-invalid-pin","txn-merchant-unsupported","txn-do-not-honor"));
         txs.findAll().stream().filter(t->t.getStatus()==Enums.TransactionStatus.DECLINED&&t.getRecoveryStatus()==null).forEach(t->{
             t.setRecoveryStatus("NETWORK_ERROR".equals(t.getFailureCode())?Enums.RecoveryStatus.RETRY_AVAILABLE:Enums.RecoveryStatus.ACTION_REQUIRED);
             t.setRecoveryUpdatedAt(Instant.now());txs.save(t);
         });
+    }
+    private void seedTravelHistory(TripRepository trips){
+        if(!trips.existsById("trip-singapore"))trips.save(trip("trip-singapore","customer-001","Singapore","Singapore",
+                LocalDate.of(2025,5,1),LocalDate.of(2025,5,8),new BigDecimal("1800"),"USD","card-001",Enums.TripStatus.COMPLETED));
+        if(!trips.existsById("trip-new-york"))trips.save(trip("trip-new-york","customer-001","United States","New York",
+                LocalDate.of(2024,10,6),LocalDate.of(2024,10,12),new BigDecimal("2400"),"USD","card-001",Enums.TripStatus.COMPLETED));
+        if(!trips.existsById("trip-barcelona"))trips.save(trip("trip-barcelona","customer-001","Spain","Barcelona",
+                LocalDate.of(2024,4,15),LocalDate.of(2024,4,22),new BigDecimal("2100"),"USD","card-001",Enums.TripStatus.COMPLETED));
+        if(!trips.existsById("trip-sydney"))trips.save(trip("trip-sydney","customer-001","Australia","Sydney",
+                LocalDate.of(2023,12,2),LocalDate.of(2023,12,11),new BigDecimal("3600"),"USD","card-001",Enums.TripStatus.COMPLETED));
+        if(!trips.existsById("trip-rome-history"))trips.save(trip("trip-rome-history","customer-001","Italy","Rome",
+                LocalDate.of(2023,5,10),LocalDate.of(2023,5,18),new BigDecimal("2600"),"USD","card-001",Enums.TripStatus.COMPLETED));
+        if(!trips.existsById("trip-dubai-history"))trips.save(trip("trip-dubai-history","customer-001","United Arab Emirates","Dubai",
+                LocalDate.of(2022,11,3),LocalDate.of(2022,11,9),new BigDecimal("3100"),"USD","card-001",Enums.TripStatus.COMPLETED));
+        if(!trips.existsById("trip-cape-town-history"))trips.save(trip("trip-cape-town-history","customer-001","South Africa","Cape Town",
+                LocalDate.of(2022,3,12),LocalDate.of(2022,3,22),new BigDecimal("2800"),"USD","card-001",Enums.TripStatus.COMPLETED));
+        if(!trips.existsById("trip-rio-history"))trips.save(trip("trip-rio-history","customer-001","Brazil","Rio de Janeiro",
+                LocalDate.of(2021,9,5),LocalDate.of(2021,9,14),new BigDecimal("2400"),"USD","card-001",Enums.TripStatus.COMPLETED));
+        if(!trips.existsById("trip-vancouver-history"))trips.save(trip("trip-vancouver-history","customer-001","Canada","Vancouver",
+                LocalDate.of(2021,2,18),LocalDate.of(2021,2,25),new BigDecimal("2100"),"USD","card-001",Enums.TripStatus.COMPLETED));
+        if(!trips.existsById("trip-bangkok-history"))trips.save(trip("trip-bangkok-history","customer-001","Thailand","Bangkok",
+                LocalDate.of(2020,8,2),LocalDate.of(2020,8,10),new BigDecimal("1900"),"USD","card-001",Enums.TripStatus.COMPLETED));
+        if(!trips.existsById("trip-reykjavik-history"))trips.save(trip("trip-reykjavik-history","customer-001","Iceland","Reykjavik",
+                LocalDate.of(2019,12,7),LocalDate.of(2019,12,13),new BigDecimal("2700"),"USD","card-001",Enums.TripStatus.COMPLETED));
+        if(!trips.existsById("trip-mexico-city-history"))trips.save(trip("trip-mexico-city-history","customer-001","Mexico","Mexico City",
+                LocalDate.of(2019,4,20),LocalDate.of(2019,4,27),new BigDecimal("1800"),"USD","card-001",Enums.TripStatus.COMPLETED));
     }
     private void seedOpenAlert(FraudAlertRepository alerts){
         if(!alerts.existsById("alert-review-pending"))alerts.save(FraudAlert.builder().id("alert-review-pending")
@@ -95,12 +122,14 @@ public class DataSeeder {
                 .status(Enums.AlertStatus.OPEN).createdAt(Instant.now()).customerResponse(Enums.CustomerResponse.NONE).build());
     }
     private void seedTrackingCase(SupportCaseRepository cases){
-        if(!cases.existsById("CASE-TRV-2048"))cases.save(SupportCase.builder().id("CASE-TRV-2048")
+        SupportCase c=cases.findById("CASE-TRV-2048").orElseGet(()->SupportCase.builder().id("CASE-TRV-2048")
                 .customerId("customer-001").tripId("trip-tokyo").transactionId("txn-country-mismatch")
-                .type(Enums.CaseType.FRAUD_INVESTIGATION).status(Enums.CaseStatus.UNDER_REVIEW)
+                .type(Enums.CaseType.FRAUD_INVESTIGATION)
                 .title("Fraud investigation · Paris Luxury Boutique")
-                .currentUpdate("Merchant evidence requested. The disputed payment remains protected while the bank reviews it.")
-                .createdAt(Instant.now().minusSeconds(172800)).updatedAt(Instant.now().minusSeconds(3600)).build());
+                .createdAt(Instant.now().minusSeconds(259200)).build());
+        c.setStatus(Enums.CaseStatus.RESOLVED);
+        c.setCurrentUpdate("Investigation complete. The payment was confirmed as fraud and the temporary credit is now final.");
+        c.setUpdatedAt(Instant.now().minusSeconds(3600));cases.save(c);
     }
     private void configureCardCurrencies(CardRepository cards){
         configureCard(cards,"card-001","USD","JPY,EUR,GBP,SGD,CNY");
