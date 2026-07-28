@@ -21,7 +21,7 @@ springdoc:
     path: /swagger-ui.html
 integration:
   fx:
-    base-url: ${FX_API_BASE_URL:https://api.frankfurter.app}
+    base-url: ${FX_API_BASE_URL:https://api.frankfurter.dev}
     enabled: ${FX_API_ENABLED:true}
     timeout-seconds: 3
   fraud:

@@ -1,7 +1,12 @@
 let authToken=localStorage.getItem("traveller_access_token")||"";
 const $=s=>document.querySelector(s);
-const money=n=>new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"}).format(n||0);
-const currencyMoney=(n,currency="USD")=>new Intl.NumberFormat("en-US",{style:"currency",currency:currency||"USD"}).format(n||0);
+const formatMoney=(n,currency="USD")=>{
+  const safeCurrency=(currency||"USD").toUpperCase();
+  try{return new Intl.NumberFormat("en-US",{style:"currency",currency:safeCurrency}).format(n||0)}
+  catch{return new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"}).format(n||0)}
+};
+const money=(n,currency)=>(formatMoney(n,currency||state.dashboard?.currency||"USD"));
+const currencyMoney=(n,currency="USD")=>formatMoney(n,currency);
 const dayCount=date=>Math.ceil((new Date(`${date}T12:00:00`)-new Date())/86400000);
 let state={trips:[],dashboard:null,alerts:[],cards:[],transactions:[],cases:[]};
 let activeRecovery=null;
@@ -19,7 +24,7 @@ function openSheet(html){
   $("#contentPage").innerHTML=html;$("#sheet").classList.add("hidden");
   $("#contentPage").scrollTo({top:0,behavior:"smooth"});
 }
-const journeyCard=t=>`<div class="menu-card" onclick="showJourney('${t.id}')" role="button"><h3>${t.destinationCity||t.destinationCountry}, ${t.destinationCountry}</h3><p>${t.startDate} — ${t.endDate} · ${t.status}</p><div class="amount">${money(t.budget)}</div><button class="inline-link">Open journey →</button></div>`;
+const journeyCard=t=>`<div class="menu-card" onclick="showJourney('${t.id}')" role="button"><h3>${t.destinationCity||t.destinationCountry}, ${t.destinationCountry}</h3><p>${t.startDate} — ${t.endDate} · ${t.status}</p><div class="amount">${currencyMoney(t.budget,t.budgetCurrency)}</div><button class="inline-link">Open journey →</button></div>`;
 const fraudReasonText={
   OUTSIDE_TRIP_DATE:"Outside your registered travel dates",OUTSIDE_DESTINATION:"Different from your trip destination",
   UNEXPECTED_CURRENCY:"Unusual currency for this destination",DUPLICATE_TRANSACTION:"Similar payment seen recently",
@@ -103,17 +108,17 @@ async function load(){
     $("#trips").innerHTML=(upcoming.length?upcoming:trips).map(t=>`<article class="trip" role="button" tabindex="0" onclick="showJourney('${t.id}')">
       <span class="tag">${t.status}</span><span class="arrow">→</span>
       <h3>${t.destinationCity}, ${t.destinationCountry}</h3>
-      <p>${t.startDate} — ${t.endDate} · ${money(t.budget)}</p>
+      <p>${t.startDate} — ${t.endDate} · ${currencyMoney(t.budget,t.budgetCurrency)}</p>
     </article>`).join("");
-    $("#spent").textContent=money(dashboard.spent);
-    $("#remaining").textContent=money(dashboard.remaining);
-    $("#budget").textContent=money(dashboard.budget);
+    $("#spent").textContent=currencyMoney(dashboard.spent,dashboard.currency);
+    $("#remaining").textContent=currencyMoney(dashboard.remaining,dashboard.currency);
+    $("#budget").textContent=currencyMoney(dashboard.budget,dashboard.currency);
     renderTravelToolkit();
     const failed=dashboard.recentTransactions.find(t=>t.status==="DECLINED"&&t.failureCode==="NETWORK_ERROR")||dashboard.recentTransactions.find(t=>t.status==="DECLINED");
     const featuredByHero=renderHomeAssistant(failed);
     $("#attentionSection").style.display=failed&&!featuredByHero?"block":"none";
     $("#paymentIssue").innerHTML=failed?`<div class="issue-card interrupted-home" onclick="paymentHelp('${failed.transactionId}')">
-      <div class="issue-icon">!</div><div><small>PAYMENT INTERRUPTED</small><h3>Complete your ${failed.merchantName} payment</h3><p>${money(failed.billingAmount)} · We found the best next step</p></div><span class="chevron">→</span></div>`:"";
+      <div class="issue-icon">!</div><div><small>PAYMENT INTERRUPTED</small><h3>Complete your ${failed.merchantName} payment</h3><p>${currencyMoney(failed.billingAmount,failed.billingCurrency)} · We found the best next step</p></div><span class="chevron">→</span></div>`:"";
     const activeCases=cases.filter(c=>c.status!=="RESOLVED");
     $("#caseTracking").innerHTML=activeCases.length?`<div class="section-head compact-head"><div><span class="eyebrow">BANK FOLLOW-UP</span><h2>Cases in progress</h2></div><button onclick="showCases()">View all</button></div>${activeCases.slice(0,1).map(caseCard).join("")}`:"";
     maybeShowFraudAlert();
@@ -198,7 +203,7 @@ function showCardSolution(tripId,ruleCode){
   const trip=state.trips.find(t=>t.id===tripId),available=state.cards.filter(c=>c.status==="ACTIVE"&&c.id!==trip.preferredCardId);
   openSheet(`<button class="back" onclick="runCheck('${tripId}')">← Readiness check</button><span class="eyebrow">RECOMMENDED SOLUTION</span>
     <h2>Choose a better travel card</h2><p>${ruleCode==="LOW_AVAILABLE_BALANCE"?"Choose a card linked to an account with enough available funds.":"Select an active backup card for this journey."}</p>
-    ${available.map(c=>`<div class="menu-card"><h3>${c.cardType} ${c.maskedCardNumber}</h3><p>Main currency ${c.mainCurrency||"—"} · Supports ${(c.supportedCurrencies||[]).join(", ")||"none listed"} · Limit ${money(c.dailyPaymentLimit)}</p><button class="inline-link" onclick="selectJourneyCard('${tripId}','${c.id}')">Use for this trip →</button></div>`).join("")||"<p>No other active card is available. Contact secure banking support to arrange a replacement.</p>"}`);
+    ${available.map(c=>`<div class="menu-card"><h3>${c.cardType} ${c.maskedCardNumber}</h3><p>Main currency ${c.mainCurrency||"—"} · Supports ${(c.supportedCurrencies||[]).join(", ")||"none listed"} · Limit ${currencyMoney(c.dailyPaymentLimit,c.mainCurrency)}</p><button class="inline-link" onclick="selectJourneyCard('${tripId}','${c.id}')">Use for this trip →</button></div>`).join("")||"<p>No other active card is available. Contact secure banking support to arrange a replacement.</p>"}`);
 }
 window.selectJourneyCard=async(tripId,cardId)=>{
   const t=state.trips.find(x=>x.id===tripId);
@@ -213,7 +218,7 @@ window.showJourney=async id=>{
   try{
     const trip=state.trips.find(t=>t.id===id),[d,fx]=await Promise.all([api(`/api/travel/trips/${id}/dashboard`),api(`/api/travel/trips/${id}/exchange-rate?_=${Date.now()}`,{headers:{"Cache-Control":"no-cache"}})]);
     const card=state.cards.find(c=>c.id===trip.preferredCardId),used=Number(d.budgetUsagePercentage||0);
-    const budgetAdvice=used>100?"Spending is above the planned budget. Review recent purchases before using more funds.":used>75?"Most of the budget has been used. Keep a closer eye on the remaining days.":used>0?`${Math.round(used)}% of the budget has been used and ${money(d.remaining)} remains.`:"No spending yet. Your full travel budget is still available.";
+    const budgetAdvice=used>100?"Spending is above the planned budget. Review recent purchases before using more funds.":used>75?"Most of the budget has been used. Keep a closer eye on the remaining days.":used>0?`${Math.round(used)}% of the budget has been used and ${currencyMoney(d.remaining,d.currency)} remains.`:"No spending yet. Your full travel budget is still available.";
     const cardAdvice=fx.cardSupportsCurrency?`${card?.cardType||"Your card"} ${fx.maskedCardNumber} supports ${fx.destinationCurrency} and overseas payments are ${card?.overseasPaymentsEnabled?"enabled":"not enabled"}.`:`${card?.cardType||"Your card"} ${fx.maskedCardNumber} is not verified for this destination currency.`;
     openSheet(`<button class="back" onclick="activate('trips')">← All journeys</button>
       <span class="eyebrow">${trip.status}</span><h2>${trip.destinationCity}, ${trip.destinationCountry}</h2>
@@ -224,9 +229,9 @@ window.showJourney=async id=>{
         <div class="assistant-insight"><b>Pay like a local</b><p>Choose ${fx.destinationCurrency||"the local currency"} at the terminal. Avoid merchant currency conversion and keep a backup payment method.</p></div>
       </section>
       <div class="detail-grid">
-        <div><small>BUDGET</small><strong>${money(d.budget)}</strong></div>
-        <div><small>REMAINING</small><strong>${money(d.remaining)}</strong></div>
-        <div><small>SPENT</small><strong>${money(d.spent)}</strong></div>
+        <div><small>BUDGET</small><strong>${currencyMoney(d.budget,d.currency)}</strong></div>
+        <div><small>REMAINING</small><strong>${currencyMoney(d.remaining,d.currency)}</strong></div>
+        <div><small>SPENT</small><strong>${currencyMoney(d.spent,d.currency)}</strong></div>
         <div><small>TRANSACTIONS</small><strong>${d.transactionCount}</strong></div>
       </div>
       <button class="budget-edit" onclick="openBudgetEditor('${id}')">Adjust travel budget <span>→</span></button>
@@ -250,7 +255,7 @@ async function saveBudget(event,id){
 function transactionRow(t){
   const recovered=(t.recoveryStatus||"").startsWith("COMPLETED_"),interrupted=t.status==="DECLINED";
   const label=recovered?"✓ Paid after retry":interrupted?"● Payment interrupted · Action needed":t.status;
-  return `<div class="check ${interrupted?"interrupted":recovered?"recovered":""}"><b>${t.merchantName} · ${money(t.billingAmount)}</b>
+  return `<div class="check ${interrupted?"interrupted":recovered?"recovered":""}"><b>${t.merchantName} · ${currencyMoney(t.billingAmount,t.billingCurrency)}</b>
     <small>${t.transactionTime.slice(0,10)} · ${label}</small>
     ${interrupted||recovered?`<button class="inline-link" onclick="paymentHelp('${t.transactionId}')">${recovered?"View recovery timeline":"Complete this payment"} →</button>`:""}</div>`;
 }
