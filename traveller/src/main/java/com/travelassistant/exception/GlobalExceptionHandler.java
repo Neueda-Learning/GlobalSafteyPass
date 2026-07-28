@@ -4,6 +4,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.*;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 import java.time.Instant;
 import java.util.*;
 
@@ -25,6 +26,8 @@ public class GlobalExceptionHandler {
     ResponseEntity<Map<String,Object>> missing(RuntimeException ex, HttpServletRequest req) { return body(HttpStatus.NOT_FOUND, ex.getMessage(), req); }
     @ExceptionHandler(DuplicateTransactionException.class)
     ResponseEntity<Map<String,Object>> conflict(RuntimeException ex, HttpServletRequest req) { return body(HttpStatus.CONFLICT, ex.getMessage(), req); }
+    @ExceptionHandler(NoResourceFoundException.class)
+    ResponseEntity<Map<String,Object>> notFound(NoResourceFoundException ex, HttpServletRequest req) { return body(HttpStatus.NOT_FOUND, "Resource not found", req); }
     @ExceptionHandler(ExternalServiceException.class)
     ResponseEntity<Map<String,Object>> external(RuntimeException ex, HttpServletRequest req) { return body(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), req); }
     @ExceptionHandler(Exception.class)
