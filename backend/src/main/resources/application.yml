@@ -1,0 +1,18 @@
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/global_safety_pass?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    username: ${DB_USERNAME:safety}
+    password: ${DB_PASSWORD:safety}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+server:
+  port: ${PORT:8080}
