@@ -197,23 +197,26 @@ window.showCase=id=>{
 };
 function renderHomeAssistant(failed){
   const next=state.trips.find(t=>t.status!=="COMPLETED"&&t.status!=="CANCELLED")||state.trips[0];
-  if(!next)return false;
+  const panel=$("#nextBestAction");
+  if(!next){panel.hidden=true;return false}
   const openAlert=state.alerts.find(a=>a.status==="OPEN");
   const preferred=state.cards.find(c=>c.id===next.preferredCardId);
-  let title="Your trip plan is ready to review",detail="See card, currency and budget advice prepared for this journey.",button="Open travel plan",action=()=>showJourney(next.id),score=state.dashboard.readinessStatus==="READY"?"✓":"!";
-  if(openAlert){title="Confirm an unusual travel payment";detail=`Check ${openAlert.merchantName}, ${currencyMoney(openAlert.amount,openAlert.currency)} before we take action.`;button="Review payment";action=showAlerts;score="!"}
-  else if(failed){title="Resolve your declined payment";detail=`We found the likely reason ${failed.merchantName} was declined and prepared the next step.`;button="Fix payment";action=()=>paymentHelp(failed.transactionId);score="!"}
-  else if(preferred&&!preferred.overseasPaymentsEnabled){title="Turn on overseas payments";detail=`Your preferred ${preferred.cardType} ${preferred.maskedCardNumber} is not yet enabled abroad.`;button="Enable securely";action=()=>cardAction(preferred.id,"enable-overseas-payments");score="!"}
+  let title="",detail="",button="",action=null,score="!",featuredPayment=false;
+  if(openAlert){title="Confirm an unusual travel payment";detail=`Check ${openAlert.merchantName}, ${currencyMoney(openAlert.amount,openAlert.currency)} before we take action.`;button="Review payment";action=showAlerts}
+  else if(failed){title="Resolve your declined payment";detail=`We found the likely reason ${failed.merchantName} was declined and prepared the next step.`;button="Fix payment";action=()=>paymentHelp(failed.transactionId);featuredPayment=true}
+  else if(preferred&&!preferred.overseasPaymentsEnabled){title="Turn on overseas payments";detail=`Your preferred ${preferred.cardType} ${preferred.maskedCardNumber} is not yet enabled abroad.`;button="Enable securely";action=()=>cardAction(preferred.id,"enable-overseas-payments")}
   else if(state.dashboard.readinessStatus!=="READY"){title="Complete your pre-travel check";detail="We’ll check card expiry, limits, balance, currency support and backup payment options.";button="Check trip readiness";action=()=>runCheck(next.id)}
-  $("#assistantAction").textContent=title;$("#readinessText").textContent=detail;$("#assistantButton").textContent=button;$("#score").textContent=score;$("#checkBtn").onclick=action;
-  return Boolean(openAlert||failed);
+  panel.hidden=!action;
+  if(!action)return false;
+  $("#assistantAction").textContent=title;$("#readinessText").textContent=detail;$("#readinessText").hidden=!detail;$("#assistantButton").textContent=button;$("#score").textContent=score;$("#checkBtn").onclick=action;
+  return featuredPayment;
 }
 async function runCheck(id="trip-tokyo"){
   try{
     const r=await api(`/api/travel/trips/${id}/readiness-check`,{method:"POST"});
     if(id==="trip-tokyo"){
       $("#score").textContent=r.score+"/100";$("#ring span").textContent=r.score;
-      $("#readinessText").textContent=r.status==="READY"?"Everything is ready. Have a great trip!":"A few settings need attention before you leave.";
+      $("#readinessText").hidden=false;$("#readinessText").textContent=r.status==="READY"?"Everything is ready. Have a great trip!":"A few settings need attention before you leave.";
     }
     openSheet(`<button class="back" onclick="showJourney('${id}')">← Journey details</button>
       <h2>Readiness · ${r.score}/100</h2>
@@ -252,9 +255,11 @@ window.selectJourneyCard=async(tripId,cardId)=>{
   try{await api(`/api/travel/trips/${tripId}`,{method:"PUT",body:JSON.stringify({destinationCountry:t.destinationCountry,destinationCity:t.destinationCity,startDate:t.startDate,endDate:t.endDate,budget:t.budget,budgetCurrency:t.budgetCurrency,preferredCardId:cardId})});await load();toast("Preferred card updated");runCheck(tripId)}catch(e){toast(e.message)}
 };
 function showCurrencyGuidance(tripId,ruleCode="CURRENCY_UNKNOWN"){openSheet(`<button class="back" onclick="runCheck('${tripId}')">← Readiness check</button><span class="eyebrow">BACKUP PAYMENT</span><h2>${ruleCode==="CURRENCY_NOT_SUPPORTED"?"Card currency not supported":"Rate unavailable"}</h2><p>Change card or find a nearby ATM.</p><button class="bank-primary" onclick="showCardSolution('${tripId}','${ruleCode}')">Change card</button><button class="bank-secondary" onclick="planCashExchange('${tripId}')">Find nearby ATMs</button>`)};
-window.planCashExchange=tripId=>{
+window.planCashExchange=(tripId,origin="trip")=>{
   const trip=state.trips.find(t=>t.id===tripId);if(!trip)return;
-  openSheet(`<button class="back" onclick="showJourney('${tripId}')">← Trip details</button><span class="eyebrow">ATM FINDER</span><h2>Find an ATM</h2>
+  const back=origin==="overview"?`activate('home')`:`showJourney('${tripId}')`;
+  const backLabel=origin==="overview"?"Overview":"Trip details";
+  openSheet(`<button class="back" onclick="${back}">← ${backLabel}</button><span class="eyebrow">ATM FINDER</span><h2>Find an ATM</h2>
     <p>Search near an address, airport or hotel.</p>
     <div class="atm-search"><label>FIND NEARBY ATMS</label><div><input id="atmLocationQuery" value="${trip.destinationCity||trip.destinationCountry}, ${trip.destinationCountry}" onkeydown="if(event.key==='Enter'){event.preventDefault();searchNearbyAtms('${tripId}')}"><button id="atmSearchButton" type="button" onclick="searchNearbyAtms('${tripId}')">Search</button></div><button class="location-button" type="button" onclick="useCurrentLocationForAtms('${tripId}')">◎ Use my location</button></div>
     <div id="atmMap" class="atm-map"><div>Search a location to view nearby ATMs</div></div>
@@ -429,8 +434,14 @@ const visitedCoordinates={
   "Singapore":[1.3521,103.8198],"New York":[40.7128,-74.0060],"Barcelona":[41.3874,2.1686],
   "Sydney":[-33.8688,151.2093],"Tokyo":[35.6762,139.6503],"Paris":[48.8566,2.3522],
   "Toronto":[43.6532,-79.3832],"Nice":[43.7102,7.2620],"London":[51.5072,-0.1276],
+  "Rome":[41.9028,12.4964],"Dubai":[25.2048,55.2708],"Cape Town":[-33.9249,18.4241],
+  "Rio de Janeiro":[-22.9068,-43.1729],"Vancouver":[49.2827,-123.1207],
+  "Bangkok":[13.7563,100.5018],"Reykjavik":[64.1466,-21.9426],"Mexico City":[19.4326,-99.1332],
   "Japan":[36.2048,138.2529],"France":[46.2276,2.2137],"Canada":[56.1304,-106.3468],
-  "United States":[37.0902,-95.7129],"Spain":[40.4637,-3.7492],"Australia":[-25.2744,133.7751]
+  "United States":[37.0902,-95.7129],"Spain":[40.4637,-3.7492],"Australia":[-25.2744,133.7751],
+  "Italy":[41.8719,12.5674],"United Arab Emirates":[23.4241,53.8478],
+  "South Africa":[-30.5595,22.9375],"Brazil":[-14.2350,-51.9253],
+  "Thailand":[15.8700,100.9925],"Iceland":[64.9631,-19.0208],"Mexico":[23.6345,-102.5528]
 };
 window.showTravelAnalytics=()=>{
   const history=state.trips.filter(t=>t.status==="COMPLETED");
@@ -438,21 +449,26 @@ window.showTravelAnalytics=()=>{
   const worldPercent=(countries.length/195*100).toFixed(1);
   openSheet(`<button class="back" onclick="activate('home')">← Overview</button>
     <div class="analytics-title"><span class="eyebrow">YOUR TRAVEL STORY</span><h2>Analytics</h2><p>See how your past journeys are shaping your world.</p></div>
-    <div id="travelWorldMap" class="travel-world-map"><span>Loading your travel map…</span></div>
-    <div class="travel-metrics"><div><strong>${worldPercent}%</strong><small>OF THE WORLD</small></div><div><strong>${history.length}</strong><small>TRIPS</small></div><div><strong>${countries.length}</strong><small>COUNTRIES</small></div></div>
-    <h3>Travel history</h3>${history.length?history.sort((a,b)=>b.endDate.localeCompare(a.endDate)).map(t=>`<button class="history-row" onclick="showJourney('${t.id}')"><span><b>${escapeHtml(t.destinationCity||t.destinationCountry)}</b><small>${escapeHtml(t.destinationCountry)} · ${t.startDate.slice(0,4)}</small></span><i>→</i></button>`).join(""):"<div class=\"atm-empty\">Complete a trip to start your travel map.</div>"}`);
+    <section class="travel-story-card">
+      <span class="eyebrow">YOUR TRIPS</span>
+      <div id="travelWorldMap" class="travel-world-map"><span>Loading your travel map…</span></div>
+      <div class="travel-metrics"><div><strong>${worldPercent}%</strong><small>OF THE WORLD</small></div><div><strong>${history.length}</strong><small>TRIPS</small></div><div><strong>${countries.length}</strong><small>COUNTRIES</small></div></div>
+    </section>`);
   renderTravelWorldMap(history);
 };
 function renderTravelWorldMap(history){
   if(activeAnalyticsMap){activeAnalyticsMap.remove();activeAnalyticsMap=null}
   if(!window.L){$("#travelWorldMap").innerHTML="<span>Map unavailable.</span>";return}
   $("#travelWorldMap").innerHTML="";
-  activeAnalyticsMap=L.map("travelWorldMap",{zoomControl:false,minZoom:1,maxZoom:5,worldCopyJump:true,attributionControl:true}).setView([18,8],1);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:5,attribution:"© OpenStreetMap contributors"}).addTo(activeAnalyticsMap);
+  activeAnalyticsMap=L.map("travelWorldMap",{zoomControl:true,minZoom:1,maxZoom:10,worldCopyJump:true,attributionControl:true,
+    dragging:true,touchZoom:true,scrollWheelZoom:true,doubleClickZoom:true}).setView([18,8],1);
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png",{
+    subdomains:"abcd",maxZoom:10,attribution:"© OpenStreetMap contributors © CARTO"
+  }).addTo(activeAnalyticsMap);
   history.forEach(t=>{
     const point=visitedCoordinates[t.destinationCity]||visitedCoordinates[t.destinationCountry];if(!point)return;
-    L.circleMarker(point,{radius:8,color:"#0d6b4b",weight:3,fillColor:"#d5f16b",fillOpacity:1})
-      .addTo(activeAnalyticsMap).bindPopup(`<b>${escapeHtml(t.destinationCity||t.destinationCountry)}</b><br>${escapeHtml(t.destinationCountry)} · ${t.startDate.slice(0,4)}`);
+    L.circleMarker(point,{radius:8,color:"#0d6b4b",weight:3,fillColor:"#d5f16b",fillOpacity:1,interactive:false})
+      .addTo(activeAnalyticsMap);
   });
 }
 function renderTransactionsPage(){
@@ -490,13 +506,12 @@ function renderProfilePage(){
     <div class="profile-header"><div class="profile-avatar">JH</div><div><h3>Jessie Han</h3><p>Customer · 001 · Secure session active</p></div></div>
     <section class="section-head"><div><span class="eyebrow">TRAVEL CARDS</span><h2>Your cards</h2></div><small class="swipe-hint">Swipe →</small></section>
     <div class="card-wallet">${state.cards.map(physicalCard).join("")}</div>
-    <section class="section-head"><div><span class="eyebrow">DEMO TOOLS</span><h2>Payment testing</h2></div></section>
+    <section class="section-head"><div><span class="eyebrow">DEMO TOOL</span><h2>Test a payment</h2></div></section>
     <div class="payment-test-launch">
-      <div class="test-lab-icon">＋</div><div><h3>Record a test payment</h3><p>Run a payment through card, FX, travel and fraud checks.</p></div>
-      <button onclick="openPaymentTest()">Open</button>
+      <div class="test-lab-icon">＋</div><div><p>Test card, FX and fraud checks.</p></div>
+      <button onclick="openPaymentTest()">Start</button>
     </div>
-    <section class="section-head"><div><span class="eyebrow">SECURITY</span><h2>Sign-in & alerts</h2></div></section>
-    <div class="menu-card"><h3>Preferred verification</h3><p>Trusted device / Face ID · SMS remains available</p></div>
+    <section class="section-head"><div><h2>Security</h2></div></section>
     <button class="bank-secondary" onclick="showAlerts()">Review fraud alerts</button><button class="bank-secondary" onclick="signOut()">Sign out securely</button>`);
 }
 window.openPaymentTest=()=>{
@@ -635,6 +650,11 @@ $("#close").onclick=()=>activate("home");
 $("#refresh").onclick=async()=>{await load();toast("Journeys refreshed")};
 $("#createTrip").onclick=openCreateTrip;
 $("#headerAnalytics").onclick=showTravelAnalytics;
+$("#headerAtms").onclick=()=>{
+  const trip=state.trips.find(t=>t.status!=="COMPLETED"&&t.status!=="CANCELLED")||state.trips[0];
+  if(!trip){toast("Create a trip to search near your destination");return}
+  planCashExchange(trip.id,"overview");
+};
 
 let authChallenge="";
 let pendingStepUp=null;
