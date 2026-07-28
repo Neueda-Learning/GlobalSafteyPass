@@ -88,4 +88,7 @@ public final class ApiDtos {
             String reasonClassification,int confidence,String explanation,String safetyMessage,String travelContext,
             String recommendedAction,List<String> alternativeActions,List<RecoveryCardOption> eligibleCards,List<RecoveryCheck> checks,
             List<RecoveryTimelineEvent> timeline) {}
+        public record CountryOption(String name,String iso2,String iso3,String mainstreamCurrency) {}
+        public record CityOption(String name) {}
+        public record CurrencyOption(String code,String name,boolean mainstreamForCountry) {}
 }

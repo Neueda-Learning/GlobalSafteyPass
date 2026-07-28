@@ -10,6 +10,67 @@ const currencyMoney=(n,currency="USD")=>formatMoney(n,currency);
 const dayCount=date=>Math.ceil((new Date(`${date}T12:00:00`)-new Date())/86400000);
 let state={trips:[],dashboard:null,alerts:[],cards:[],transactions:[],cases:[]};
 let activeRecovery=null;
+const tripRef={countries:[],citiesByCountry:new Map(),currenciesByCountry:new Map()};
+
+async function ensureTripReference(){
+  if(tripRef.countries.length)return;
+  const [{data:countries}]=await Promise.all([api("/api/public/reference/countries")]);
+  tripRef.countries=countries||[];
+}
+function renderCountrySelect(filter=""){
+  const select=$("#countrySelect");if(!select)return;
+  const q=filter.trim().toLowerCase();
+  const rows=tripRef.countries.filter(c=>!q||[c.name,c.iso2,c.iso3].some(v=>(v||"").toLowerCase().includes(q)));
+  select.innerHTML=rows.map(c=>`<option value="${c.name}">${c.name} (${c.iso2}/${c.iso3})</option>`).join("");
+}
+async function loadCities(country){
+  if(!country)return [];
+  if(tripRef.citiesByCountry.has(country))return tripRef.citiesByCountry.get(country);
+  const {data}=await api(`/api/public/reference/cities?country=${encodeURIComponent(country)}`);
+  tripRef.citiesByCountry.set(country,data||[]);
+  return data||[];
+}
+async function loadCurrencies(country){
+  const key=country||"__all__";
+  if(tripRef.currenciesByCountry.has(key))return tripRef.currenciesByCountry.get(key);
+  const {data}=await api(`/api/public/reference/currencies${country?`?country=${encodeURIComponent(country)}`:""}`);
+  tripRef.currenciesByCountry.set(key,data||[]);
+  return data||[];
+}
+function renderCitySelect(cities,filter=""){
+  const select=$("#citySelect");if(!select)return;
+  const q=filter.trim().toLowerCase();
+  const rows=(cities||[]).filter(x=>!q||(x.name||"").toLowerCase().includes(q));
+  select.innerHTML=rows.map(x=>`<option value="${x.name}">${x.name}</option>`).join("");
+}
+function renderCurrencySelect(currencies,filter=""){
+  const select=$("#currencySelect");if(!select)return;
+  const q=filter.trim().toLowerCase();
+  const rows=(currencies||[]).filter(x=>!q||[x.code,x.name].some(v=>(v||"").toLowerCase().includes(q)));
+  select.innerHTML=rows.map(x=>`<option value="${x.code}">${x.code} - ${x.name}${x.mainstreamForCountry?" (Mainstream)":""}</option>`).join("");
+}
+async function bindTripReferenceControls(){
+  await ensureTripReference();
+  const countrySearch=$("#countrySearch"),countrySelect=$("#countrySelect"),citySearch=$("#citySearch"),currencySearch=$("#currencySearch");
+  renderCountrySelect();
+  const preferred=tripRef.countries.find(c=>c.name==="Japan")||tripRef.countries[0];
+  if(preferred){
+    countrySelect.value=preferred.name;
+  }
+  const refreshByCountry=async()=>{
+    const country=countrySelect.value;
+    const [cities,currencies]=await Promise.all([loadCities(country),loadCurrencies(country)]);
+    renderCitySelect(cities,citySearch?.value||"");
+    renderCurrencySelect(currencies,currencySearch?.value||"");
+    if(cities.length)$("#citySelect").value=cities[0].name;
+    if(currencies.length)$("#currencySelect").value=currencies[0].code;
+  };
+  await refreshByCountry();
+  countrySearch.oninput=()=>renderCountrySelect(countrySearch.value);
+  countrySelect.onchange=refreshByCountry;
+  citySearch.oninput=()=>renderCitySelect(tripRef.citiesByCountry.get(countrySelect.value)||[],citySearch.value);
+  currencySearch.oninput=()=>renderCurrencySelect(tripRef.currenciesByCountry.get(countrySelect.value)||[],currencySearch.value);
+}
 
 async function api(path,opt={}){
   const headers={"Content-Type":"application/json",...opt.headers};
@@ -62,22 +123,32 @@ const alertCard=a=>{
 function cardOptions(){
   return state.cards.filter(c=>c.status==="ACTIVE").map(c=>`<option value="${c.id}">${c.cardType} ${c.maskedCardNumber} · main ${c.mainCurrency||"—"} · supports ${(c.supportedCurrencies||[]).join("/")||"none"}${c.overseasPaymentsEnabled?"":" · overseas off"}</option>`).join("");
 }
-function openCreateTrip(){
+async function openCreateTrip(){
   const start=new Date(Date.now()+7*86400000).toISOString().slice(0,10);
   const end=new Date(Date.now()+14*86400000).toISOString().slice(0,10);
   openSheet(`<button class="back" onclick="activate('trips')">← My journeys</button>
     <span class="eyebrow">PLAN AHEAD</span><h2>Create a trip</h2>
     <p>Add your destination and choose the card you plan to use.</p>
     <form class="trip-form" id="tripForm">
-      <label>DESTINATION COUNTRY<input name="destinationCountry" placeholder="e.g. Japan" required></label>
-      <label>CITY<input name="destinationCity" placeholder="e.g. Tokyo"></label>
+      <label>DESTINATION COUNTRY
+        <input id="countrySearch" placeholder="Search country by name or code (e.g. HK, HKG)">
+        <select id="countrySelect" name="destinationCountry" required></select>
+      </label>
+      <label>CITY
+        <input id="citySearch" placeholder="Search city">
+        <select id="citySelect" name="destinationCity"></select>
+      </label>
       <div class="row"><label>START DATE<input name="startDate" type="date" min="${new Date().toISOString().slice(0,10)}" value="${start}" required></label>
       <label>END DATE<input name="endDate" type="date" min="${new Date().toISOString().slice(0,10)}" value="${end}" required></label></div>
       <div class="row"><label>BUDGET<input name="budget" type="number" min="0.01" step="0.01" value="2500" required></label>
-      <label>CURRENCY<input name="budgetCurrency" maxlength="3" value="USD" pattern="[A-Za-z]{3}" required></label></div>
+      <label>CURRENCY
+        <input id="currencySearch" placeholder="Search code or name (e.g. HKD)">
+        <select id="currencySelect" name="budgetCurrency" required></select>
+      </label></div>
       <label>PREFERRED CARD<select name="preferredCardId" required>${cardOptions()}</select><small>The destination exchange rate is stored against this card when the journey is opened.</small></label>
       <button type="submit">Create trip</button>
     </form>`);
+  await bindTripReferenceControls();
   $("#tripForm").onsubmit=createTrip;
 }
 async function createTrip(event){
