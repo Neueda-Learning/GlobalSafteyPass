@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(~{::title}, ~{::section})}">
+<head>
+    <title>Security Monitoring - Travel Lion</title>
+</head>
+<body>
+<section>
+    <div class="page-title">Security Monitoring</div>
+    <div class="page-subtitle">Phase 3: Detect unusual transactions</div>
+
+    <div class="stat-grid mb-3">
+        <div class="stat-card border-start border-4 border-danger">
+            <div class="label">High Risk</div>
+            <div class="value text-danger"
+                 th:text="${#lists.size(alerts.?[riskLevel.name() == 'HIGH' and status.name() == 'PENDING'])}"></div>
+        </div>
+        <div class="stat-card border-start border-4 border-warning">
+            <div class="label">Medium Risk</div>
+            <div class="value text-warning"
+                 th:text="${#lists.size(alerts.?[riskLevel.name() == 'MEDIUM' and status.name() == 'PENDING'])}"></div>
+        </div>
+        <div class="stat-card border-start border-4 border-success">
+            <div class="label">Resolved</div>
+            <div class="value text-success"
+                 th:text="${#lists.size(alerts.?[status.name() != 'PENDING'])}"></div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Total Alerts</div>
+            <div class="value" th:text="${#lists.size(alerts)}"></div>
+        </div>
+    </div>
+
+    <div th:if="${#lists.isEmpty(alerts)}" class="text-center py-4 text-muted">
+        <i class="bi bi-shield-check fs-1 d-block mb-2 text-success"></i>
+        <p class="small mb-0">No alerts. System is running normally.</p>
+    </div>
+
+    <div th:each="alert : ${alerts}" class="trip-card"
+         th:classappend="${alert.riskLevel.name() == 'HIGH'} ? 'risk-high' : (${alert.riskLevel.name() == 'MEDIUM'} ? 'risk-medium' : 'risk-low')">
+        <div class="d-flex flex-wrap gap-1 mb-2">
+            <span class="badge"
+                  th:classappend="${alert.riskLevel.name() == 'HIGH'} ? 'bg-danger' : (${alert.riskLevel.name() == 'MEDIUM'} ? 'bg-warning text-dark' : 'bg-success')"
+                  th:text="${alert.riskLevel}"></span>
+            <span class="badge bg-secondary" th:text="${alert.alertType}"></span>
+            <span class="badge"
+                  th:classappend="${alert.status.name() == 'PENDING'} ? 'bg-primary' : 'bg-secondary'"
+                  th:text="${alert.status}"></span>
+        </div>
+        <p class="small mb-2" th:text="${alert.reason}"></p>
+        <div th:if="${alert.transaction != null}" class="text-muted mb-2" style="font-size:0.7rem">
+            <span th:text="${alert.transaction.merchant}"></span> -
+            <span th:text="${alert.transaction.amount + ' ' + alert.transaction.currency}"></span>
+        </div>
+        <div th:if="${alert.status.name() == 'PENDING'}" class="d-grid gap-2">
+            <form th:action="@{/alerts/{id}/confirm(id=${alert.id})}" method="post">
+                <button class="btn btn-sm btn-success w-100"><i class="bi bi-check-lg"></i> Confirm Legitimate</button>
+            </form>
+            <form th:action="@{/alerts/{id}/report(id=${alert.id})}" method="post">
+                <button class="btn btn-sm btn-warning w-100"><i class="bi bi-flag"></i> Report Fraud</button>
+            </form>
+            <div class="d-flex gap-2">
+                <form th:action="@{/alerts/{id}/dismiss(id=${alert.id})}" method="post" class="flex-fill">
+                    <button class="btn btn-sm btn-outline-secondary w-100"><i class="bi bi-x-lg"></i> Dismiss</button>
+                </form>
+                <form th:if="${alert.transaction != null}" th:action="@{/cards/{id}/freeze(id=${alert.transaction.card.id})}" method="post" class="flex-fill">
+                    <button class="btn btn-sm btn-danger w-100"><i class="bi bi-lock"></i> Freeze</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</section>
+</body>
+</html>

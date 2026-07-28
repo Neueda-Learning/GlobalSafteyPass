@@ -1,0 +1,9 @@
+{
+    "terminal.integrated.env.windows": {
+        "JAVA_HOME": "D:\\dev\\jdk\\jdk-17.0.13+11",
+        "MAVEN_HOME": "D:\\dev\\maven\\apache-maven-3.9.16",
+        "Path": "D:\\dev\\jdk\\jdk-17.0.13+11\\bin;D:\\dev\\maven\\apache-maven-3.9.16\\bin;${env:Path}"
+    }
+}
+
+

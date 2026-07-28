@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(~{::title}, ~{::section})}">
+<head>
+    <title>Home - Travel Lion</title>
+</head>
+<body>
+<section>
+    <div class="page-title">Travel Assistant</div>
+    <div class="page-subtitle">Create Trip &rarr; Readiness &rarr; Payments &rarr; Security</div>
+
+    <a href="/trips/new" class="btn btn-hsbc w-100 mb-3 py-2">
+        <i class="bi bi-plus-lg me-1"></i> Create New Trip
+    </a>
+
+    <div class="mb-3">
+        <div class="phase-card">
+            <div class="phase-icon bg-primary bg-opacity-10">
+                <i class="bi bi-calendar-check text-primary"></i>
+            </div>
+            <div>
+                <div class="text-muted small">Phase 1</div>
+                <div class="fw-semibold">Travel Readiness</div>
+            </div>
+        </div>
+        <div class="phase-card">
+            <div class="phase-icon bg-success bg-opacity-10">
+                <i class="bi bi-credit-card text-success"></i>
+            </div>
+            <div>
+                <div class="text-muted small">Phase 2</div>
+                <div class="fw-semibold">Payment Tracking</div>
+            </div>
+        </div>
+        <div class="phase-card">
+            <div class="phase-icon bg-danger bg-opacity-10">
+                <i class="bi bi-shield-exclamation text-danger"></i>
+            </div>
+            <div>
+                <div class="text-muted small">Phase 3</div>
+                <div class="fw-semibold">
+                    Fraud Monitoring
+                    <span th:if="${pendingAlerts > 0}" class="badge bg-danger ms-1" th:text="${pendingAlerts}"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h6 class="fw-semibold mb-2"><i class="bi bi-list-ul me-1"></i> My Trips</h6>
+
+    <div th:if="${#lists.isEmpty(trips)}" class="text-center py-4 text-muted">
+        <i class="bi bi-suitcase-lg fs-1 d-block mb-2"></i>
+        <p class="small mb-0">No trips yet.<br><a href="/trips/new">Create one now</a></p>
+    </div>
+
+    <div th:each="trip : ${trips}" class="trip-card">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <div class="fw-bold" th:text="${trip.destination}"></div>
+                <div class="small text-muted">
+                    <span th:text="${trip.startDate}"></span> ~ <span th:text="${trip.endDate}"></span>
+                </div>
+            </div>
+            <span class="badge"
+                  th:classappend="${trip.readinessScore >= 80} ? 'bg-success' : (${trip.readinessScore >= 50} ? 'bg-warning text-dark' : 'bg-danger')"
+                  th:text="${trip.readinessScore} + ' pts'"></span>
+        </div>
+        <div class="small text-muted mt-1">
+            <span th:text="${trip.budget + ' ' + trip.currency}"></span>
+            &middot; <span class="badge bg-secondary" th:text="${trip.status}"></span>
+        </div>
+        <div class="actions">
+            <a th:href="@{/trips/{id}/readiness(id=${trip.id})}" class="btn btn-sm btn-outline-primary">Readiness</a>
+            <a th:href="@{/trips/{id}/dashboard(id=${trip.id})}" class="btn btn-sm btn-outline-success">Dashboard</a>
+        </div>
+    </div>
+</section>
+</body>
+</html>

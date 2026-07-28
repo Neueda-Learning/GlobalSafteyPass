@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout(~{::title}, ~{::section})}">
+<head>
+    <title>Readiness Check - Travel Lion</title>
+</head>
+<body>
+<section>
+    <div th:if="${success}" class="alert alert-success small py-2" th:text="${success}"></div>
+
+    <div class="page-title">Readiness Check</div>
+    <div class="page-subtitle" th:text="${trip.destination}"></div>
+
+    <div class="card p-3 text-center mb-3">
+        <h6 class="text-muted mb-2 small">Readiness Score</h6>
+        <div class="score-ring mx-auto mb-2"
+             th:classappend="${readiness.score >= 80} ? 'score-ready' : (${readiness.score >= 50} ? 'score-caution' : 'score-not-ready')"
+             th:text="${readiness.score}">
+        </div>
+        <span class="badge"
+              th:classappend="${readiness.level == 'READY'} ? 'bg-success' : (${readiness.level == 'CAUTION'} ? 'bg-warning text-dark' : 'bg-danger')"
+              th:text="${readiness.level == 'READY'} ? 'Ready to Travel' : (${readiness.level == 'CAUTION'} ? 'Needs Attention' : 'Not Ready')">
+        </span>
+    </div>
+
+    <div class="card p-3 mb-3">
+        <h6 class="fw-semibold mb-2 small">Trip Details</h6>
+        <dl class="row mb-0 small">
+            <dt class="col-5 text-muted">Destination</dt>
+            <dd class="col-7" th:text="${trip.destination}"></dd>
+            <dt class="col-5 text-muted">Dates</dt>
+            <dd class="col-7"><span th:text="${trip.startDate}"></span> ~ <span th:text="${trip.endDate}"></span></dd>
+            <dt class="col-5 text-muted">Budget</dt>
+            <dd class="col-7" th:text="${trip.budget + ' ' + trip.currency}"></dd>
+        </dl>
+    </div>
+
+    <div class="card p-3 mb-3">
+        <h6 class="fw-semibold mb-2 small">Card Details</h6>
+        <dl class="row mb-0 small">
+            <dt class="col-5 text-muted">Card</dt>
+            <dd class="col-7" th:text="${card.cardName}"></dd>
+            <dt class="col-5 text-muted">Number</dt>
+            <dd class="col-7" th:text="${card.maskedNumber}"></dd>
+            <dt class="col-5 text-muted">Expiry</dt>
+            <dd class="col-7" th:text="${card.expiryDate}"></dd>
+            <dt class="col-5 text-muted">Balance</dt>
+            <dd class="col-7" th:text="${card.balance + ' ' + card.currency}"></dd>
+            <dt class="col-5 text-muted">Overseas</dt>
+            <dd class="col-7">
+                <span th:if="${card.overseasEnabled}" class="badge bg-success">Enabled</span>
+                <span th:unless="${card.overseasEnabled}" class="badge bg-danger">Disabled</span>
+            </dd>
+            <dt class="col-5 text-muted">Status</dt>
+            <dd class="col-7">
+                <span th:if="${card.frozen}" class="badge bg-danger">Frozen</span>
+                <span th:unless="${card.frozen}" class="badge bg-success">Active</span>
+            </dd>
+        </dl>
+    </div>
+
+    <div class="card mb-3" th:if="${!#lists.isEmpty(readiness.warnings)}">
+        <div class="card-header bg-warning bg-opacity-10 py-2">
+            <h6 class="mb-0 small text-warning-emphasis"><i class="bi bi-exclamation-triangle me-1"></i>Warnings</h6>
+        </div>
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item small" th:each="w : ${readiness.warnings}">
+                <span class="badge bg-warning text-dark me-1" th:text="${w.type}"></span>
+                <span th:text="${w.message}"></span>
+            </li>
+        </ul>
+    </div>
+
+    <div class="card mb-3" th:if="${!#lists.isEmpty(readiness.actions)}">
+        <div class="card-header bg-primary bg-opacity-10 py-2">
+            <h6 class="mb-0 small text-primary"><i class="bi bi-lightning me-1"></i>Recommended Actions</h6>
+        </div>
+        <div class="list-group list-group-flush">
+            <div class="list-group-item small" th:each="a : ${readiness.actions}">
+                <div class="fw-semibold" th:text="${a.action}"></div>
+                <div class="text-muted mb-2" th:text="${a.description}"></div>
+                <form th:if="${a.action == 'ENABLE_OVERSEAS'}" th:action="@{/cards/{id}/enable-overseas(id=${card.id})}" method="post">
+                    <input type="hidden" name="tripId" th:value="${trip.id}">
+                    <button class="btn btn-sm btn-hsbc w-100">Enable Now</button>
+                </form>
+                <form th:if="${a.action == 'UNFREEZE_CARD'}" th:action="@{/cards/{id}/unfreeze(id=${card.id})}" method="post">
+                    <input type="hidden" name="tripId" th:value="${trip.id}">
+                    <button class="btn btn-sm btn-hsbc w-100">Unfreeze Now</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-3" th:if="${#lists.isEmpty(readiness.warnings)}">
+        <div class="card-body text-center py-4">
+            <i class="bi bi-check-circle-fill text-success fs-1"></i>
+            <h6 class="mt-2 mb-0">All set! Have a great trip!</h6>
+        </div>
+    </div>
+
+    <a th:href="@{/trips/{id}/dashboard(id=${trip.id})}" class="btn btn-hsbc w-100 py-2 mb-2">
+        <i class="bi bi-bar-chart me-1"></i>Go to Dashboard
+    </a>
+    <a href="/" class="btn btn-outline-secondary w-100">Back to Home</a>
+</section>
+</body>
+</html>
