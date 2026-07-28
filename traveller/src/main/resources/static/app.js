@@ -20,11 +20,40 @@ function openSheet(html){
   $("#contentPage").scrollTo({top:0,behavior:"smooth"});
 }
 const journeyCard=t=>`<div class="menu-card" onclick="showJourney('${t.id}')" role="button"><h3>${t.destinationCity||t.destinationCountry}, ${t.destinationCountry}</h3><p>${t.startDate} — ${t.endDate} · ${t.status}</p><div class="amount">${money(t.budget)}</div><button class="inline-link">Open journey →</button></div>`;
-const alertCard=a=>`<div class="support alert-detail"><div class="alert-status"><h3>${a.riskLevel} risk</h3><span>${a.status.replaceAll("_"," ")}</span></div>
-  <div class="alert-payment"><strong>${currencyMoney(a.amount,a.currency)}</strong><b>${a.merchantName}</b>
-    <small>${a.maskedCardNumber} · ${a.merchantCountry||"Location unavailable"} · ${a.transactionTime?new Date(a.transactionTime).toLocaleString():"Time unavailable"}</small></div>
-  <p>${a.customerMessage}</p><small>${a.reasonCodes.join(" · ")}</small>${a.caseReference?`<div class="case-reference"><small>FRAUD CASE</small><b>${a.caseReference}</b><span>Investigation opened. Keep this reference for support.</span></div>`:""}
-  ${a.status==="OPEN"?`<p class="decision-copy">Review the payment details above before choosing an option.</p><div class="menu-actions alert-actions"><button onclick="resolveAlert('${a.id}','confirm')">It was me</button><button class="danger" onclick="resolveAlert('${a.id}','report')">Report fraud</button><button class="light" onclick="resolveAlert('${a.id}','freeze-card')">Freeze card</button></div>`:""}</div>`;
+const fraudReasonText={
+  OUTSIDE_TRIP_DATE:"Outside your registered travel dates",OUTSIDE_DESTINATION:"Different from your trip destination",
+  UNEXPECTED_CURRENCY:"Unusual currency for this destination",DUPLICATE_TRANSACTION:"Similar payment seen recently",
+  HIGH_VALUE_TRANSACTION:"Higher than your usual spending",UNUSUAL_ATM_WITHDRAWAL:"Several cash withdrawals close together",
+  RAPID_COUNTRY_CHANGE:"Used in different countries too quickly",MULTIPLE_DECLINES:"Several recent payment attempts",
+  DECLINE_THEN_APPROVAL:"Large payment after recent declines",NEW_MERCHANT_CATEGORY:"A new type of merchant for you",
+  CARD_FROZEN_TRANSACTION:"Activity on a frozen card",HIGH_RISK_COUNTRY:"Higher-risk payment location",
+  CUSTOMER_PROFILE_ANOMALY:"Different from your normal spending pattern"
+};
+const friendlyFraudReasons=a=>(a.reasonCodes||[]).map(code=>fraudReasonText[code]||code.replaceAll("_"," ").toLowerCase());
+const alertPayment=a=>`<div class="alert-payment"><strong>${currencyMoney(a.amount,a.currency)}</strong><b>${a.merchantName}</b>
+  <small>${a.maskedCardNumber} · ${a.merchantCountry||"Location unavailable"}<br>${a.transactionTime?new Date(a.transactionTime).toLocaleString():"Time unavailable"}</small></div>`;
+const alertCard=a=>{
+  const reasons=friendlyFraudReasons(a),status=a.status;
+  if(status==="OPEN")return `<article class="fraud-alert-card alert-open">
+    <div class="alert-status"><div><small>ACTION NEEDED</small><h3>Is this your payment?</h3></div><span>${a.riskLevel} RISK</span></div>
+    ${alertPayment(a)}
+    <p>We paused to let you check the merchant, amount, location and time.</p>
+    <div class="reason-summary"><b>Why we’re checking</b>${reasons.slice(0,3).map(r=>`<span>• ${r}</span>`).join("")}</div>
+    <div class="menu-actions alert-actions"><button onclick="resolveAlert('${a.id}','confirm')">Yes, it was me</button><button class="danger" onclick="resolveAlert('${a.id}','report')">No, report fraud</button><button class="light" onclick="resolveAlert('${a.id}','freeze-card')">Freeze card</button></div>
+  </article>`;
+  if(status==="CONFIRMED_SAFE")return `<article class="fraud-alert-card alert-safe">
+    <div class="resolved-alert-head"><div class="resolved-check">✓</div><div><small>REVIEW COMPLETE</small><h3>Confirmed as yours</h3></div></div>
+    <div class="resolved-payment"><div><b>${a.merchantName}</b><small>${a.maskedCardNumber} · ${a.merchantCountry||"Location unavailable"}</small></div><strong>${currencyMoney(a.amount,a.currency)}</strong></div>
+    <p>No further action is needed. Your card remains available to use.</p>
+    ${reasons.length?`<details class="alert-explanation"><summary>Why we originally checked</summary><span>${reasons.join(" · ")}</span></details>`:""}
+  </article>`;
+  return `<article class="fraud-alert-card alert-incident">
+    <div class="alert-status"><div><small>SECURITY CASE</small><h3>${status==="REPORTED_FRAUD"?"Reported as fraud":"Card frozen"}</h3></div><span>${status.replaceAll("_"," ")}</span></div>
+    ${alertPayment(a)}
+    <p>${status==="REPORTED_FRAUD"?"We’re investigating this payment. Follow the case for updates.":"This card cannot be used until you securely unfreeze it."}</p>
+    ${a.caseReference?`<div class="case-reference"><small>FRAUD CASE</small><b>${a.caseReference}</b><span>Keep this reference for support.</span></div>`:""}
+  </article>`;
+};
 function cardOptions(){
   return state.cards.filter(c=>c.status==="ACTIVE").map(c=>`<option value="${c.id}">${c.cardType} ${c.maskedCardNumber} · main ${c.mainCurrency||"—"} · supports ${(c.supportedCurrencies||[]).join("/")||"none"}${c.overseasPaymentsEnabled?"":" · overseas off"}</option>`).join("");
 }
@@ -79,7 +108,7 @@ async function load(){
     $("#spent").textContent=money(dashboard.spent);
     $("#remaining").textContent=money(dashboard.remaining);
     $("#budget").textContent=money(dashboard.budget);
-    $("#alertCount").textContent=`${alerts.filter(a=>a.status==="OPEN").length} alert(s) need review`;
+    renderTravelToolkit();
     const failed=dashboard.recentTransactions.find(t=>t.status==="DECLINED"&&t.failureCode==="NETWORK_ERROR")||dashboard.recentTransactions.find(t=>t.status==="DECLINED");
     const featuredByHero=renderHomeAssistant(failed);
     $("#attentionSection").style.display=failed&&!featuredByHero?"block":"none";
@@ -112,6 +141,25 @@ function renderHomeAssistant(failed){
   $("#assistantAction").textContent=title;$("#readinessText").textContent=detail;$("#assistantButton").textContent=button;$("#score").textContent=score;$("#checkBtn").onclick=action;
   return Boolean(openAlert||failed);
 }
+function renderTravelToolkit(){
+  const next=state.trips.find(t=>t.status!=="COMPLETED"&&t.status!=="CANCELLED")||state.trips[0];
+  const preferred=next&&state.cards.find(c=>c.id===next.preferredCardId);
+  const location=next?(next.destinationCity||next.destinationCountry):"your next trip";
+  $("#travelToolkitContext").textContent=`Quick access for ${location}—without repeating items already shown in your next best action.`;
+  const cardTitle=preferred?(preferred.overseasPaymentsEnabled?"Preferred card is ready":"Finish setting up your preferred card"):"Choose a travel card";
+  const cardDetail=preferred?`${preferred.cardType} ${preferred.maskedCardNumber} · Overseas payments ${preferred.overseasPaymentsEnabled?"on":"off"}`:"Select a card and check destination currency support";
+  $("#travelActions").innerHTML=`
+    <button onclick="${preferred&&!preferred.overseasPaymentsEnabled?`enableTravelCard('${preferred.id}')`:"activate('profile')"}">
+      <b class="toolkit-icon">▣</b><span>${cardTitle}<small>${cardDetail}</small></span><i>→</i>
+    </button>
+    <button onclick="activate('transactions')">
+      <b class="toolkit-icon">↗</b><span>Payments &amp; cash<small>Track spending and recover interrupted payments</small></span><i>→</i>
+    </button>`;
+}
+window.enableTravelCard=async id=>{
+  try{await api(`/api/travel/cards/${id}/enable-overseas-payments`,{method:"POST"});await load();toast("Your preferred card is ready for overseas payments")}
+  catch(e){toast(e.message)}
+};
 
 async function runCheck(id="trip-tokyo"){
   try{
@@ -404,8 +452,11 @@ window.cardAction=async(id,action)=>{
   try{await api(`/api/travel/cards/${id}/${action}`,{method:"POST"});toast("Card settings updated");await load();activate("security")}catch(e){toast(e.message)}
 };
 function showAlerts(){
-  openSheet(`<button class="back" onclick="activate('home')">← Home</button><span class="eyebrow">SECURITY ALERTS</span><h2>Review card activity</h2>
-    ${state.alerts.length?state.alerts.map(alertCard).join(""):"<p>You have no security alerts.</p>"}`);
+  const open=state.alerts.filter(a=>a.status==="OPEN"),resolved=state.alerts.filter(a=>a.status!=="OPEN");
+  openSheet(`<button class="back" onclick="activate('home')">← Overview</button><span class="eyebrow">CARD SECURITY</span><h2>${open.length?"Payments to confirm":"You’re all caught up"}</h2>
+    <p class="security-intro">${open.length?`Check ${open.length} payment${open.length>1?"s":""}. We’ll only ask you to act on activity that still needs a decision.`:"There are no payments waiting for your confirmation."}</p>
+    ${open.length?`<section class="alert-group"><span class="eyebrow">NEEDS YOUR RESPONSE</span>${open.map(alertCard).join("")}</section>`:`<div class="security-clear"><span>✓</span><b>No action needed</b><small>We’ll notify you if a payment needs checking.</small></div>`}
+    ${resolved.length?`<section class="alert-group resolved-group"><div class="resolved-group-title"><span class="eyebrow">PAST REVIEWS</span><small>${resolved.length} record${resolved.length>1?"s":""}</small></div>${resolved.map(alertCard).join("")}</section>`:""}`);
 }
 function maybeShowFraudAlert(){
   if(!$("#contentPage").classList.contains("hidden")||!$("#authGate").classList.contains("hidden"))return;
@@ -426,17 +477,8 @@ window.resolveAlert=async(id,action)=>{
 };
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>activate(b.dataset.page));
 $("#checkBtn").onclick=()=>runCheck();
-$("#overseas").onclick=async()=>{
-  try{
-    const card=await api("/api/travel/cards/card-002/enable-overseas-payments",{method:"POST"});
-    await load();
-    openSheet(`<span class="eyebrow">CARD SETTINGS</span><h2>Overseas payments enabled</h2>
-      <div class="success-panel"><b>${card.cardType} ${card.maskedCardNumber}</b><p>Your card can now be used for overseas purchases.</p></div>
-      <div class="menu-actions"><button onclick="runCheck('trip-tokyo')">Re-run Tokyo readiness</button><button class="light" onclick="activate('home')">Done</button></div>`);
-  }catch(e){toast(e.message)}
-};
-$("#alerts").onclick=showAlerts;
-$("#fraudDemo").onclick=async()=>{
+const fraudDemo=$("#fraudDemo");
+if(fraudDemo)fraudDemo.onclick=async()=>{
   const button=$("#fraudDemo");button.classList.add("loading");
   try{
     const id=`txn-demo-${Date.now()}`;
@@ -454,7 +496,9 @@ $("#fraudDemo").onclick=async()=>{
       <div class="menu-actions"><button onclick="showAlerts()">Review alert</button><button class="light" onclick="activate('home')">Close</button></div>`);
   }catch(e){toast(e.message)}finally{button.classList.remove("loading")}
 };
-$("#swagger").onclick=()=>location.href="/swagger-ui.html";
+const swagger=$("#swagger");if(swagger)swagger.onclick=()=>location.href="/swagger-ui.html";
+$("#securityActivity").onclick=showAlerts;
+$("#trackCases").onclick=showCases;
 $("#close").onclick=()=>activate("home");
 $("#refresh").onclick=async()=>{await load();toast("Journeys refreshed")};
 $("#createTrip").onclick=openCreateTrip;
