@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Voyage · Travel Assistant</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<section id="authGate" class="auth-gate">
+  <div class="auth-card">
+    <div class="auth-brand">V</div><span class="eyebrow">SECURE MOBILE BANKING</span>
+    <div id="authBody">
+      <h2>Welcome back</h2><p>Verify your identity to open Travel Assistant.</p>
+      <label class="auth-label">CUSTOMER ID<input id="authCustomer" value="customer-001" autocomplete="username"></label>
+      <button class="bank-primary" id="authStart">Continue securely</button>
+    </div>
+    <p class="auth-foot">Protected by encrypted, short-lived banking sessions.</p>
+  </div>
+</section>
+<section id="fraudPopup" class="fraud-popup hidden" aria-live="assertive"><div id="fraudPopupBody"></div></section>
+<main class="phone">
+  <div id="homePage" class="app-page">
+  <header><div><span class="eyebrow">YOUR TRAVEL ASSISTANT</span><h1 id="welcomeTitle">Good evening,<br>Jessie.</h1></div><button class="avatar" title="Sign out">JH</button></header>
+  <div class="next-trip-line"><span id="nextTripLabel">Finding your next journey…</span><button id="openNextTrip">View trip →</button></div>
+  <section class="hero">
+    <div class="hero-top"><div><span class="label">YOUR NEXT BEST ACTION</span><strong id="assistantAction">Preparing your travel advice…</strong></div><div id="ring" class="ring"><span id="score">—</span></div></div>
+    <p id="readinessText">We’re reviewing your cards, payments and travel plan.</p>
+    <button id="checkBtn" class="primary"><span id="assistantButton">Review recommendation</span><span>→</span></button>
+  </section>
+  <section class="stats">
+    <div><span>TRIP BUDGET</span><strong id="budget">$2,500</strong></div><i></i>
+    <div><span>USED</span><strong id="spent">$—</strong></div><i></i>
+    <div><span>LEFT TO SPEND</span><strong id="remaining">$—</strong></div>
+  </section>
+  <section class="section-head"><div><span class="eyebrow">PLAN WITH YOUR BANK</span><h2>Upcoming journeys</h2></div><div><button id="createTrip">+ New trip</button><button id="refresh">Refresh</button></div></section>
+  <div id="trips" class="trips"><div class="skeleton"></div><div class="skeleton"></div></div>
+  <section id="attentionSection">
+    <div id="paymentIssue"></div>
+  </section>
+  <section id="caseTracking"></section>
+  <section id="travelBankingSection" class="travel-toolkit">
+    <div class="section-head compact-head"><div><span class="eyebrow">USEFUL ON YOUR TRIP</span><h2>Travel essentials</h2></div></div>
+    <p id="travelToolkitContext" class="toolkit-context">Preparing shortcuts for your next journey…</p>
+    <div id="travelActions" class="actions travel-actions"></div>
+    <details class="more-services"><summary>Security &amp; support</summary>
+      <button id="securityActivity">View security activity</button>
+      <button id="trackCases">Track bank support cases</button>
+    </details>
+  </section>
+  </div>
+  <section id="contentPage" class="app-page hidden"></section>
+  <section id="sheet" class="sheet hidden"><button id="close">×</button><div id="sheetBody"></div></section>
+  <nav aria-label="Travel Assistant">
+    <button class="active" data-page="home" aria-label="Overview">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5M5.5 10v10h13V10M9.5 20v-6h5v6"/></svg>
+      <span>Overview</span>
+    </button>
+    <button data-page="trips" aria-label="My trips">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7V5.5A1.5 1.5 0 0 1 9.5 4h5A1.5 1.5 0 0 1 16 5.5V7M4 8.5h16v11H4zM4 12h16M9 10v4M15 10v4"/></svg>
+      <span>My trips</span>
+    </button>
+    <button data-page="transactions" aria-label="Transactions">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16M4 12h16M4 19h16M7 3v4M17 10v4M10 17v4"/></svg>
+      <span>Transactions</span>
+    </button>
+    <button data-page="profile" aria-label="Profile">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4.5 21a7.5 7.5 0 0 1 15 0"/></svg>
+      <span>Profile</span>
+    </button>
+  </nav>
+</main>
+<div id="toast"></div>
+<script src="/app.js"></script>
+</body></html>

@@ -1,0 +1,32 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: travel_assistant
+      MYSQL_USER: travel_user
+      MYSQL_PASSWORD: travel_password
+      MYSQL_ROOT_PASSWORD: root_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD","mysqladmin","ping","-h","localhost","-uroot","-proot_password"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  travel-assistant-app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: jdbc:mysql://mysql:3306/travel_assistant?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      DATABASE_USERNAME: travel_user
+      DATABASE_PASSWORD: travel_password
+      FX_API_BASE_URL: https://api.frankfurter.app
+      FX_API_ENABLED: "true"
+    depends_on:
+      mysql:
+        condition: service_healthy
+volumes:
+  mysql_data:

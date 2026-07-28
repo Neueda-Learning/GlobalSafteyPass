@@ -1,0 +1,49 @@
+spring:
+  application:
+    name: traveller
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+  profiles:
+    default: mysql
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+  jackson:
+    default-property-inclusion: non_null
+server:
+  port: 8080
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+integration:
+  fx:
+    base-url: ${FX_API_BASE_URL:https://api.frankfurter.app}
+    enabled: ${FX_API_ENABLED:true}
+    timeout-seconds: 3
+  fraud:
+    mode: ${FRAUD_API_MODE:mock}
+    base-url: ${FRAUD_API_BASE_URL:}
+    api-key: ${FRAUD_API_KEY:}
+fraud:
+  alert-threshold: 50
+  weights:
+    internal: 0.50
+    external: 0.30
+    customer-profile: 0.20
+  thresholds:
+    outside-trip-date: 30
+    outside-destination: 35
+    unexpected-currency: 15
+    duplicate-transaction: 40
+    high-value: 30
+    unusual-atm: 45
+    rapid-country-change: 60
+    multiple-declines: 30
+    decline-then-approval: 40
+    new-category: 15
+    frozen-card: 80
+    high-risk-country: 60
