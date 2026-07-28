@@ -12,4 +12,4 @@ RUN addgroup -S traveller && adduser -S traveller -G traveller
 COPY --from=build /workspace/target/traveller-1.0.0.jar app.jar
 USER traveller
 EXPOSE 8080
-ENTRYPOINT ["java","-jar","app.jar","--spring.profiles.active=prod"]
+ENTRYPOINT ["sh","-c","java -jar app.jar --spring.profiles.active=${SPRING_PROFILES_ACTIVE:-prod}"]

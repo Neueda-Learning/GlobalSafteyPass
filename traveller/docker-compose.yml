@@ -6,8 +6,6 @@ services:
       MYSQL_USER: travel_user
       MYSQL_PASSWORD: travel_password
       MYSQL_ROOT_PASSWORD: root_password
-    ports:
-      - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
@@ -16,6 +14,7 @@ services:
       timeout: 5s
       retries: 20
   travel-assistant-app:
+    pull_policy: build
     build: .
     ports:
       - "8080:8080"
@@ -23,7 +22,7 @@ services:
       DATABASE_URL: jdbc:mysql://mysql:3306/travel_assistant?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       DATABASE_USERNAME: travel_user
       DATABASE_PASSWORD: travel_password
-      FX_API_BASE_URL: https://api.frankfurter.dev/v1
+      FX_API_BASE_URL: https://api.frankfurter.dev
       FX_API_ENABLED: "true"
       INTEGRATION_MAPS_PLACES_TIMEOUT_SECONDS: "3"
     depends_on:
