@@ -11,15 +11,17 @@ import java.util.*;
 public class JourneyExchangeRateService {
     private static final Map<String,String> DESTINATION_CURRENCY=Map.of(
             "Japan","JPY","France","EUR","Singapore","SGD","China","CNY",
-            "United Kingdom","GBP","United States","USD");
+            "United Kingdom","GBP","United States","USD","Hong Kong","HKD");
     private final TripService trips;private final CardRepository cards;private final AccountRepository accounts;private final ExchangeRateService rates;private final CardFxRateRepository storedRates;private final CardCapabilityService capabilities;
     public JourneyExchangeRateService(TripService trips,CardRepository cards,AccountRepository accounts,ExchangeRateService rates,CardFxRateRepository storedRates,CardCapabilityService capabilities){
         this.trips=trips;this.cards=cards;this.accounts=accounts;this.rates=rates;this.storedRates=storedRates;this.capabilities=capabilities;}
     public JourneyExchangeRateResponse get(String customer,String tripId){
         Trip trip=trips.owned(customer,tripId);Card card=cards.findById(trip.getPreferredCardId()).orElseThrow();
         Account account=accounts.findById(card.getLinkedAccountId()).orElseThrow();
-        boolean verified=DESTINATION_CURRENCY.containsKey(trip.getDestinationCountry());
-        String destinationCurrency=DESTINATION_CURRENCY.get(trip.getDestinationCountry());
+        String mappedCurrency=DESTINATION_CURRENCY.get(trip.getDestinationCountry());
+        String budgetCurrency=trip.getBudgetCurrency()==null?null:trip.getBudgetCurrency().toUpperCase();
+        String destinationCurrency=mappedCurrency==null?budgetCurrency:mappedCurrency;
+        boolean verified=destinationCurrency!=null&&!destinationCurrency.isBlank();
         String mainCurrency=card.getMainCurrency()==null?account.getCurrency():card.getMainCurrency();
         boolean supported=verified&&capabilities.supportsCurrency(card,destinationCurrency);
         if(!verified)return new JourneyExchangeRateResponse(tripId,trip.getDestinationCountry(),card.getId(),card.getMaskedCardNumber(),
@@ -30,8 +32,15 @@ public class JourneyExchangeRateService {
                 .forEach(currency->storeRate(card.getId(),mainCurrency,currency));
         ExchangeRateQuote quote=rates.rate(mainCurrency,destinationCurrency,LocalDate.now());
         persist(card.getId(),mainCurrency,destinationCurrency,quote);
-        String recommendation=supported?"This preferred card supports the destination currency."
+        String recommendation;
+        if(mappedCurrency==null){
+            recommendation=supported
+                ?"Using your trip budget currency as fallback because the destination currency is not mapped yet."
+                :"Using your trip budget currency as fallback. This card does not list that currency, so switch cards or plan cash exchange.";
+        }else{
+            recommendation=supported?"This preferred card supports the destination currency."
                 :"This card does not list the destination currency. Switch cards in Trip Details or exchange cash after arrival.";
+        }
         return new JourneyExchangeRateResponse(tripId,trip.getDestinationCountry(),card.getId(),card.getMaskedCardNumber(),
                 mainCurrency,destinationCurrency,quote.rate(),quote.rateDate(),quote.provider(),quote.estimated(),Instant.now(),true,supported,recommendation);
     }
