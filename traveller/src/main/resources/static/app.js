@@ -11,17 +11,54 @@ const dayCount=date=>Math.ceil((new Date(`${date}T12:00:00`)-new Date())/8640000
 let state={trips:[],dashboard:null,alerts:[],cards:[],transactions:[],cases:[]};
 let activeRecovery=null;
 const tripRef={countries:[],citiesByCountry:new Map(),currenciesByCountry:new Map()};
+let tripPickerOutsideHandlerBound=false;
+
+const countryDisplay=c=>`${c.name} (${c.iso2}/${c.iso3})`;
+const currencyDisplay=c=>`${c.code} - ${c.name}`;
+
+function resolveCountrySelection(raw){
+  const value=(raw||"").trim();
+  if(!value)return null;
+  return tripRef.countries.find(c=>
+    c.name.toLowerCase()===value.toLowerCase()
+    || countryDisplay(c).toLowerCase()===value.toLowerCase()
+    || c.iso2.toLowerCase()===value.toLowerCase()
+    || c.iso3.toLowerCase()===value.toLowerCase()
+  )||null;
+}
+
+function parseCurrencyCode(raw){
+  const value=(raw||"").trim().toUpperCase();
+  if(!value)return "";
+  const m=value.match(/^[A-Z]{3}/);
+  return m?m[0]:value;
+}
+
+function escapeHtml(v=""){
+  return v.replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
+}
+
+function closeTripPanels(){
+  ["#countryPanel","#cityPanel","#currencyPanel"].forEach(id=>$(id)?.classList.remove("show"));
+}
+
+function openTripPanel(panelId){
+  closeTripPanels();
+  $(panelId)?.classList.add("show");
+}
 
 async function ensureTripReference(){
   if(tripRef.countries.length)return;
   const [{data:countries}]=await Promise.all([api("/api/public/reference/countries")]);
   tripRef.countries=countries||[];
 }
-function renderCountrySelect(filter=""){
-  const select=$("#countrySelect");if(!select)return;
+function renderCountryOptions(filter=""){
+  const list=$("#countryPanel");if(!list)return;
   const q=filter.trim().toLowerCase();
   const rows=tripRef.countries.filter(c=>!q||[c.name,c.iso2,c.iso3].some(v=>(v||"").toLowerCase().includes(q)));
-  select.innerHTML=rows.map(c=>`<option value="${c.name}">${c.name} (${c.iso2}/${c.iso3})</option>`).join("");
+  list.innerHTML=rows.length
+    ? rows.map(c=>`<button type="button" class="trip-picker-option" data-value="${escapeHtml(countryDisplay(c))}">${escapeHtml(countryDisplay(c))}</button>`).join("")
+    : '<div class="trip-picker-empty">No match</div>';
 }
 async function loadCities(country){
   if(!country)return [];
@@ -37,39 +74,92 @@ async function loadCurrencies(country){
   tripRef.currenciesByCountry.set(key,data||[]);
   return data||[];
 }
-function renderCitySelect(cities,filter=""){
-  const select=$("#citySelect");if(!select)return;
+function renderCityOptions(cities,filter=""){
+  const list=$("#cityPanel");if(!list)return;
   const q=filter.trim().toLowerCase();
   const rows=(cities||[]).filter(x=>!q||(x.name||"").toLowerCase().includes(q));
-  select.innerHTML=rows.map(x=>`<option value="${x.name}">${x.name}</option>`).join("");
+  list.innerHTML=rows.length
+    ? rows.map(x=>`<button type="button" class="trip-picker-option" data-value="${escapeHtml(x.name)}">${escapeHtml(x.name)}</button>`).join("")
+    : '<div class="trip-picker-empty">No match</div>';
 }
-function renderCurrencySelect(currencies,filter=""){
-  const select=$("#currencySelect");if(!select)return;
+function renderCurrencyOptions(currencies,filter=""){
+  const list=$("#currencyPanel");if(!list)return;
   const q=filter.trim().toLowerCase();
   const rows=(currencies||[]).filter(x=>!q||[x.code,x.name].some(v=>(v||"").toLowerCase().includes(q)));
-  select.innerHTML=rows.map(x=>`<option value="${x.code}">${x.code} - ${x.name}${x.mainstreamForCountry?" (Mainstream)":""}</option>`).join("");
+  list.innerHTML=rows.length
+    ? rows.map(x=>`<button type="button" class="trip-picker-option" data-value="${escapeHtml(currencyDisplay(x))}">${escapeHtml(currencyDisplay(x))}</button>`).join("")
+    : '<div class="trip-picker-empty">No match</div>';
 }
 async function bindTripReferenceControls(){
   await ensureTripReference();
-  const countrySearch=$("#countrySearch"),countrySelect=$("#countrySelect"),citySearch=$("#citySearch"),currencySearch=$("#currencySearch");
-  renderCountrySelect();
-  const preferred=tripRef.countries.find(c=>c.name==="Japan")||tripRef.countries[0];
-  if(preferred){
-    countrySelect.value=preferred.name;
-  }
-  const refreshByCountry=async()=>{
-    const country=countrySelect.value;
+  const countryInput=$("#countryInput"),cityInput=$("#cityInput"),currencyInput=$("#currencyInput");
+  const countryPanel=$("#countryPanel"),cityPanel=$("#cityPanel"),currencyPanel=$("#currencyPanel");
+
+  countryInput.value="";
+  cityInput.value="";
+  renderCountryOptions();
+  const initialCurrencies=await loadCurrencies("");
+  renderCurrencyOptions(initialCurrencies,"");
+  if(initialCurrencies.length)currencyInput.value=currencyDisplay(initialCurrencies[0]);
+
+  const refreshByCountry=async(resetCity=true)=>{
+    const selected=resolveCountrySelection(countryInput.value);
+    const country=selected?.name||countryInput.value.trim();
+    if(selected)countryInput.value=countryDisplay(selected);
     const [cities,currencies]=await Promise.all([loadCities(country),loadCurrencies(country)]);
-    renderCitySelect(cities,citySearch?.value||"");
-    renderCurrencySelect(currencies,currencySearch?.value||"");
-    if(cities.length)$("#citySelect").value=cities[0].name;
-    if(currencies.length)$("#currencySelect").value=currencies[0].code;
+    renderCityOptions(cities,cityInput?.value||"");
+    renderCurrencyOptions(currencies,currencyInput?.value||"");
+    if(resetCity)cityInput.value="";
+    if(currencies.length)currencyInput.value=currencyDisplay(currencies[0]);
   };
-  await refreshByCountry();
-  countrySearch.oninput=()=>renderCountrySelect(countrySearch.value);
-  countrySelect.onchange=refreshByCountry;
-  citySearch.oninput=()=>renderCitySelect(tripRef.citiesByCountry.get(countrySelect.value)||[],citySearch.value);
-  currencySearch.oninput=()=>renderCurrencySelect(tripRef.currenciesByCountry.get(countrySelect.value)||[],currencySearch.value);
+
+  countryInput.onfocus=()=>{renderCountryOptions(countryInput.value);openTripPanel("#countryPanel")};
+  countryInput.oninput=()=>{renderCountryOptions(countryInput.value);openTripPanel("#countryPanel")};
+  countryInput.onchange=()=>refreshByCountry(true);
+
+  cityInput.onfocus=()=>{
+    const key=(resolveCountrySelection(countryInput.value)?.name||countryInput.value||"").trim();
+    renderCityOptions(tripRef.citiesByCountry.get(key)||[],cityInput.value);
+    openTripPanel("#cityPanel");
+  };
+  cityInput.oninput=()=>{
+    const key=(resolveCountrySelection(countryInput.value)?.name||countryInput.value||"").trim();
+    renderCityOptions(tripRef.citiesByCountry.get(key)||[],cityInput.value);
+    openTripPanel("#cityPanel");
+  };
+
+  currencyInput.onfocus=()=>{
+    const key=(resolveCountrySelection(countryInput.value)?.name||countryInput.value||"").trim();
+    renderCurrencyOptions(tripRef.currenciesByCountry.get(key)||tripRef.currenciesByCountry.get("__all__")||[],currencyInput.value);
+    openTripPanel("#currencyPanel");
+  };
+  currencyInput.oninput=()=>{
+    const key=(resolveCountrySelection(countryInput.value)?.name||countryInput.value||"").trim();
+    renderCurrencyOptions(tripRef.currenciesByCountry.get(key)||tripRef.currenciesByCountry.get("__all__")||[],currencyInput.value);
+    openTripPanel("#currencyPanel");
+  };
+
+  countryPanel.onclick=async e=>{
+    const option=e.target.closest(".trip-picker-option");if(!option)return;
+    countryInput.value=option.dataset.value||"";
+    closeTripPanels();
+    await refreshByCountry(true);
+  };
+  cityPanel.onclick=e=>{
+    const option=e.target.closest(".trip-picker-option");if(!option)return;
+    cityInput.value=option.dataset.value||"";
+    closeTripPanels();
+  };
+  currencyPanel.onclick=e=>{
+    const option=e.target.closest(".trip-picker-option");if(!option)return;
+    currencyInput.value=option.dataset.value||"";
+    closeTripPanels();
+  };
+
+  if(!tripPickerOutsideHandlerBound){
+    document.addEventListener("click",e=>{if(!e.target.closest(".trip-picker-wrap"))closeTripPanels()});
+    tripPickerOutsideHandlerBound=true;
+  }
 }
 
 async function api(path,opt={}){
@@ -130,20 +220,26 @@ async function openCreateTrip(){
     <span class="eyebrow">PLAN AHEAD</span><h2>Create a trip</h2>
     <p>Add your destination and choose the card you plan to use.</p>
     <form class="trip-form" id="tripForm">
-      <label>DESTINATION COUNTRY
-        <input id="countrySearch" placeholder="Search country by name or code (e.g. HK, HKG)">
-        <select id="countrySelect" name="destinationCountry" required></select>
+      <label>DESTINATION COUNTRY / REGION
+        <div class="trip-picker-wrap">
+          <input class="trip-picker" id="countryInput" name="destinationCountry" placeholder="Search or choose country/region (e.g. Hong Kong, HK)" autocomplete="off" required>
+          <div class="trip-picker-panel" id="countryPanel"></div>
+        </div>
       </label>
       <label>CITY
-        <input id="citySearch" placeholder="Search city">
-        <select id="citySelect" name="destinationCity"></select>
+        <div class="trip-picker-wrap">
+          <input class="trip-picker" id="cityInput" name="destinationCity" placeholder="Search or choose city" autocomplete="off">
+          <div class="trip-picker-panel" id="cityPanel"></div>
+        </div>
       </label>
       <div class="row"><label>START DATE<input name="startDate" type="date" min="${new Date().toISOString().slice(0,10)}" value="${start}" required></label>
       <label>END DATE<input name="endDate" type="date" min="${new Date().toISOString().slice(0,10)}" value="${end}" required></label></div>
       <div class="row"><label>BUDGET<input name="budget" type="number" min="0.01" step="0.01" value="2500" required></label>
       <label>CURRENCY
-        <input id="currencySearch" placeholder="Search code or name (e.g. HKD)">
-        <select id="currencySelect" name="budgetCurrency" required></select>
+        <div class="trip-picker-wrap">
+          <input class="trip-picker" id="currencyInput" name="budgetCurrency" placeholder="Search or choose currency (e.g. HKD)" autocomplete="off" required>
+          <div class="trip-picker-panel" id="currencyPanel"></div>
+        </div>
       </label></div>
       <label>PREFERRED CARD<select name="preferredCardId" required>${cardOptions()}</select><small>The destination exchange rate is stored against this card when the journey is opened.</small></label>
       <button type="submit">Create trip</button>
@@ -154,7 +250,10 @@ async function openCreateTrip(){
 async function createTrip(event){
   event.preventDefault();
   const form=new FormData(event.currentTarget);
-  const payload=Object.fromEntries(form.entries());payload.budget=Number(payload.budget);payload.budgetCurrency=payload.budgetCurrency.toUpperCase();
+  const payload=Object.fromEntries(form.entries());
+  payload.budget=Number(payload.budget);
+  payload.destinationCountry=resolveCountrySelection(payload.destinationCountry)?.name||payload.destinationCountry.trim();
+  payload.budgetCurrency=parseCurrencyCode(payload.budgetCurrency);
   if(payload.endDate<payload.startDate){toast("End date must be on or after the start date");return}
   const button=event.currentTarget.querySelector("button");button.disabled=true;button.textContent="Creating…";
   try{
