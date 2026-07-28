@@ -68,7 +68,7 @@ final class RuleResult {
     }
 }
 @Component class CurrencySupportRule implements ReadinessRule {
-    private static final Map<String,String> CURRENCY=Map.of("Japan","JPY","France","EUR","Singapore","SGD","United States","USD","United Kingdom","GBP","China","CNY");
+    private static final Map<String,String> CURRENCY=Map.of("Japan","JPY","France","EUR","Singapore","SGD","Canada","CAD","United States","USD","United Kingdom","GBP","China","CNY");
     private final CardCapabilityService capabilities;
     CurrencySupportRule(CardCapabilityService capabilities){this.capabilities=capabilities;}
     public ReadinessRuleResult evaluate(Trip t, Card c, Account a) {

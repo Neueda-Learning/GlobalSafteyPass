@@ -20,7 +20,22 @@ public final class ApiDtos {
 
     public record TripResponse(String id, String destinationCountry, String destinationCity,
             LocalDate startDate, LocalDate endDate, BigDecimal budget, String budgetCurrency,
-            String preferredCardId, TripStatus status, boolean cashExchangePlanned) {}
+            String preferredCardId, TripStatus status, boolean cashExchangePlanned,
+            String cashExchangeMethod,BigDecimal cashExchangeAmountUsd,String cashExchangeLocation,
+            Instant cashExchangePlannedAt) {}
+
+    public record CashExchangePlanRequest(
+            @NotNull @DecimalMin("20.00") BigDecimal usdAmount,
+            @NotBlank String method,@NotBlank String plannedLocation) {}
+    public record CashExchangePlanResponse(String tripId,String destinationCurrency,
+            BigDecimal usdAmount,BigDecimal estimatedLocalAmount,BigDecimal rate,
+            String method,String plannedLocation,String atmAvailability,String feeAdvice,
+            Instant plannedAt) {}
+    public record MapLocationResponse(String query,String label,double latitude,double longitude) {}
+    public record AtmLocationResponse(String id,String name,String operator,String address,
+            String openingHours,double latitude,double longitude,int distanceMeters) {}
+    public record AtmSearchResponse(double latitude,double longitude,int radiusMeters,
+            List<AtmLocationResponse> atms,String provider) {}
 
     public record TransactionEventRequest(
             @NotBlank String transactionId, String customerId, @NotBlank String cardId,

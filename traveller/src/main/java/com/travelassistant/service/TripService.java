@@ -24,11 +24,18 @@ public class TripService {
     public List<TripResponse> list(String customer){return trips.findByCustomerIdOrderByStartDateDesc(customer).stream().map(this::map).toList();}
     public TripResponse get(String customer,String id){return map(owned(customer,id));}
     @Transactional public TripResponse update(String customer,String id,TripRequest r){
-        Trip t=owned(customer,id);validate(customer,r);t.setDestinationCountry(r.destinationCountry());t.setDestinationCity(r.destinationCity());
+        Trip t=owned(customer,id);
+        if(t.getStatus()!=Enums.TripStatus.PLANNED)throw new InvalidTripException("Only planned trips can be edited.");
+        validate(customer,r);t.setDestinationCountry(r.destinationCountry());t.setDestinationCity(r.destinationCity());
         t.setStartDate(r.startDate());t.setEndDate(r.endDate());t.setBudget(r.budget());t.setBudgetCurrency(r.budgetCurrency().toUpperCase());
         t.setPreferredCardId(r.preferredCardId());t.setUpdatedAt(Instant.now());trips.save(t);audit.log(customer,"TRIP_UPDATED","TRIP",id,"Trip updated");return map(t);
     }
-    @Transactional public void delete(String customer,String id){trips.delete(owned(customer,id));}
+    @Transactional public void delete(String customer,String id){
+        Trip t=owned(customer,id);
+        if(t.getStatus()!=Enums.TripStatus.PLANNED)throw new InvalidTripException("Only planned trips can be deleted.");
+        audit.log(customer,"TRIP_DELETED","TRIP",id,t.getDestinationCountry());
+        trips.delete(t);
+    }
     public Trip owned(String customer,String id){
         Trip t=trips.findById(id).orElseThrow(()->new ResourceNotFoundException("Trip not found."));
         if(!t.getCustomerId().equals(customer))throw new ForbiddenException("Trip does not belong to current customer."); return t;
@@ -38,6 +45,5 @@ public class TripService {
         Card c=cards.findById(r.preferredCardId()).orElseThrow(()->new ResourceNotFoundException("Preferred card not found."));
         if(!c.getCustomerId().equals(customer))throw new ForbiddenException("Card does not belong to current customer.");
     }
-    @Transactional public TripResponse planCashExchange(String customer,String id){Trip t=owned(customer,id);t.setCashExchangePlanned(true);t.setUpdatedAt(Instant.now());trips.save(t);audit.log(customer,"CASH_EXCHANGE_PLAN_RECORDED","TRIP",id,"Cash exchange on arrival");return map(t);}
-    public TripResponse map(Trip t){return new TripResponse(t.getId(),t.getDestinationCountry(),t.getDestinationCity(),t.getStartDate(),t.getEndDate(),t.getBudget(),t.getBudgetCurrency(),t.getPreferredCardId(),t.getStatus(),t.isCashExchangePlanned());}
+    public TripResponse map(Trip t){return new TripResponse(t.getId(),t.getDestinationCountry(),t.getDestinationCity(),t.getStartDate(),t.getEndDate(),t.getBudget(),t.getBudgetCurrency(),t.getPreferredCardId(),t.getStatus(),t.isCashExchangePlanned(),t.getCashExchangeMethod(),t.getCashExchangeAmountUsd(),t.getCashExchangeLocation(),t.getCashExchangePlannedAt());}
 }

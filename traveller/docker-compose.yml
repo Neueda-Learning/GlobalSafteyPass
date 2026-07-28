@@ -24,6 +24,7 @@ services:
       DATABASE_PASSWORD: travel_password
       FX_API_BASE_URL: https://api.frankfurter.dev
       FX_API_ENABLED: "true"
+      INTEGRATION_MAPS_PLACES_TIMEOUT_SECONDS: "3"
     depends_on:
       mysql:
         condition: service_healthy

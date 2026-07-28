@@ -10,7 +10,7 @@ import java.util.*;
 
 @Service
 public class PaymentRecoveryService {
-    private static final Map<String,String> DESTINATION_CURRENCY=Map.of("Japan","JPY","France","EUR","Singapore","SGD","United Kingdom","GBP","China","CNY","United States","USD");
+    private static final Map<String,String> DESTINATION_CURRENCY=Map.of("Japan","JPY","France","EUR","Singapore","SGD","Canada","CAD","United Kingdom","GBP","China","CNY","United States","USD");
     private final TransactionService transactions;private final TransactionRepository repository;
     private final CardRepository cards;private final AccountRepository accounts;private final TripRepository trips;
     private final FraudAlertRepository alerts;private final AuditService audit;private final CardCapabilityService capabilities;
