@@ -10,7 +10,7 @@ import java.util.*;
 @Service
 public class JourneyExchangeRateService {
     private static final Map<String,String> DESTINATION_CURRENCY=Map.of(
-            "Japan","JPY","France","EUR","Singapore","SGD","China","CNY",
+            "Japan","JPY","France","EUR","Singapore","SGD","China","CNY","Canada","CAD",
             "United Kingdom","GBP","United States","USD");
     private final TripService trips;private final CardRepository cards;private final AccountRepository accounts;private final ExchangeRateService rates;private final CardFxRateRepository storedRates;private final CardCapabilityService capabilities;
     public JourneyExchangeRateService(TripService trips,CardRepository cards,AccountRepository accounts,ExchangeRateService rates,CardFxRateRepository storedRates,CardCapabilityService capabilities){

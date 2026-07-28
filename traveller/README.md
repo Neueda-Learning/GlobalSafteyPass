@@ -223,7 +223,7 @@ The UI's **Demo suspicious payment** action submits a high-value payment in Fran
 
 | Variable | Purpose | Default |
 | --- | --- | --- |
-| `FX_API_BASE_URL` | Exchange-rate provider base URL | `https://api.frankfurter.app` |
+| `FX_API_BASE_URL` | Exchange-rate provider base URL | `https://api.frankfurter.dev/v1` |
 | `FX_API_ENABLED` | Enable live exchange-rate requests | `true` |
 | `FRAUD_API_MODE` | Fraud adapter mode: `mock` or `http` | `mock` |
 | `FRAUD_API_BASE_URL` | External fraud service base URL | Empty |
