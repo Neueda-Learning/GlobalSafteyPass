@@ -1,6 +1,7 @@
 package com.travelassistant.service;
 
 import com.travelassistant.dto.ApiDtos.*;
+import com.travelassistant.exception.ExternalServiceException;
 import com.travelassistant.model.*;
 import com.travelassistant.repository.*;
 import org.springframework.stereotype.Service;
@@ -30,8 +31,7 @@ public class JourneyExchangeRateService {
         capabilities.supportedCurrencies(card).stream()
                 .filter(currency->!currency.isBlank()&&!currency.equals(mainCurrency))
                 .forEach(currency->storeRate(card.getId(),mainCurrency,currency));
-        ExchangeRateQuote quote=rates.rate(mainCurrency,destinationCurrency,LocalDate.now());
-        persist(card.getId(),mainCurrency,destinationCurrency,quote);
+        ExchangeRateQuote quote=liveOrStoredRate(card.getId(),mainCurrency,destinationCurrency);
         String recommendation;
         if(mappedCurrency==null){
             recommendation=supported
@@ -45,8 +45,27 @@ public class JourneyExchangeRateService {
                 mainCurrency,destinationCurrency,quote.rate(),quote.rateDate(),quote.provider(),quote.estimated(),Instant.now(),true,supported,recommendation);
     }
     private void storeRate(String cardId,String source,String target){
-        ExchangeRateQuote quote=rates.rate(source,target,LocalDate.now());
-        persist(cardId,source,target,quote);
+        try{
+            ExchangeRateQuote quote=rates.rate(source,target,LocalDate.now());
+            persist(cardId,source,target,quote);
+        }catch(ExternalServiceException ignored){}
+    }
+    private ExchangeRateQuote liveOrStoredRate(String cardId,String source,String target){
+        try{
+            ExchangeRateQuote quote=rates.rate(source,target,LocalDate.now());
+            persist(cardId,source,target,quote);
+            return quote;
+        }catch(ExternalServiceException ex){
+            return storedRates.findByCardIdAndTargetCurrency(cardId,target)
+                    .filter(stored->source.equalsIgnoreCase(stored.getSourceCurrency()))
+                    .map(this::storedQuote)
+                    .orElseThrow(()->ex);
+        }
+    }
+    private ExchangeRateQuote storedQuote(CardFxRate stored){
+        LocalDate rateDate=stored.getUpdatedAt()==null?LocalDate.now():stored.getUpdatedAt().atZone(ZoneOffset.UTC).toLocalDate();
+        String provider=stored.getProvider()==null||stored.getProvider().isBlank()?"stored-rate":stored.getProvider()+"-stored";
+        return new ExchangeRateQuote(stored.getSourceCurrency(),stored.getTargetCurrency(),stored.getRate(),rateDate,provider,true);
     }
     private void persist(String cardId,String source,String target,ExchangeRateQuote quote){
         CardFxRate stored=storedRates.findByCardIdAndTargetCurrency(cardId,target).orElseGet(()->CardFxRate.builder().id(UUID.randomUUID().toString()).cardId(cardId).targetCurrency(target).build());

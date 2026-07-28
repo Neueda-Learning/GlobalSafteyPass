@@ -38,10 +38,6 @@ function parseCurrencyCode(raw){
   return m?m[0]:value;
 }
 
-function escapeHtml(v=""){
-  return v.replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
-}
-
 function closeTripPanels(){
   ["#countryPanel","#cityPanel","#currencyPanel"].forEach(id=>$(id)?.classList.remove("show"));
 }
@@ -326,10 +322,8 @@ async function load(){
     $("#trips").innerHTML=(upcoming.length?upcoming:trips).map(t=>`<article class="trip" role="button" tabindex="0" onclick="showJourney('${t.id}')">
       <span class="tag">${t.status}</span><span class="arrow">→</span>
       <h3>${t.destinationCity}, ${t.destinationCountry}</h3>
-      
       <p>${t.startDate} — ${t.endDate} · ${currencyMoney(t.budget,t.budgetCurrency)}</p>
-    </article>`).join("");
-    ${state.tripMoney[t.id]?`<small class="trip-local">Remaining ${localRemaining(state.tripMoney[t.id].dashboard,state.tripMoney[t.id].fx)}</small>`:""}
+      ${state.tripMoney[t.id]?`<small class="trip-local">Remaining ${localRemaining(state.tripMoney[t.id].dashboard,state.tripMoney[t.id].fx)}</small>`:""}
     </article>`).join("");
     $("#spent").textContent=currencyMoney(dashboard.spent,dashboard.currency);
     $("#remaining").innerHTML=`${currencyMoney(dashboard.remaining,dashboard.currency)}<small>${localRemaining(dashboard,focusFx,true)}</small>`;
@@ -392,6 +386,25 @@ function renderHomeAssistant(failed){
   $("#assistantAction").textContent=title;$("#readinessText").textContent=detail;$("#readinessText").hidden=!detail;$("#assistantButton").textContent=button;$("#score").textContent=score;$("#checkBtn").onclick=action;
   return featuredPayment;
 }
+function renderTravelToolkit(){
+  const next=state.trips.find(t=>t.status!=="COMPLETED"&&t.status!=="CANCELLED")||state.trips[0];
+  const preferred=next&&state.cards.find(c=>c.id===next.preferredCardId);
+  const location=next?(next.destinationCity||next.destinationCountry):"your next trip";
+  $("#travelToolkitContext").textContent=`Quick access for ${location}—without repeating items already shown in your next best action.`;
+  const cardTitle=preferred?(preferred.overseasPaymentsEnabled?"Preferred card is ready":"Finish setting up your preferred card"):"Choose a travel card";
+  const cardDetail=preferred?`${preferred.cardType} ${preferred.maskedCardNumber} · Overseas payments ${preferred.overseasPaymentsEnabled?"on":"off"}`:"Select a card and check destination currency support";
+  $("#travelActions").innerHTML=`
+    <button onclick="${preferred&&!preferred.overseasPaymentsEnabled?`enableTravelCard('${preferred.id}')`:"activate('profile')"}">
+      <b class="toolkit-icon">▣</b><span>${cardTitle}<small>${cardDetail}</small></span><i>→</i>
+    </button>
+    <button onclick="activate('transactions')">
+      <b class="toolkit-icon">↗</b><span>Payments &amp; cash<small>Track spending and recover interrupted payments</small></span><i>→</i>
+    </button>`;
+}
+window.enableTravelCard=async id=>{
+  try{await api(`/api/travel/cards/${id}/enable-overseas-payments`,{method:"POST"});await load();toast("Your preferred card is ready for overseas payments")}
+  catch(e){toast(e.message)}
+};
 async function runCheck(id="trip-tokyo"){
   try{
     const r=await api(`/api/travel/trips/${id}/readiness-check`,{method:"POST"});
@@ -518,7 +531,7 @@ window.showJourney=async id=>{
       </div>
       ${planned?`<button class="budget-edit" onclick="openBudgetEditor('${id}')">Adjust travel budget <span>→</span></button>`:""}
       <div class="journey-fx ${fx.cardSupportsCurrency?"":"fx-warning"}"><div class="fx-top"><div><small>PREFERRED CARD · ${fx.maskedCardNumber}</small><strong>${fx.destinationCurrency&&fx.rate?`1 ${fx.cardCurrency} = ${Number(fx.rate).toFixed(4)} ${fx.destinationCurrency}`:"Rate unavailable"}</strong></div><button onclick="showJourney('${id}')">↻</button></div>
-      <p>${fx.recommendation}${fx.rateDate?` · ${fx.estimated?"Reference fallback":`Live indicative rate from ${fx.provider}`} · ${fx.rateDate}`:""}</p>
+      <p>${fx.recommendation}${fx.rateDate?` · ${fx.estimated?`Cached API rate from ${fx.provider}`:`Live indicative rate from ${fx.provider}`} · ${fx.rateDate}`:""}</p>
       ${!fx.destinationCurrencyVerified||!fx.cardSupportsCurrency?`<div class="menu-actions"><button onclick="showCardSolution('${id}','${fx.destinationCurrencyVerified?"CURRENCY_NOT_SUPPORTED":"CURRENCY_UNKNOWN"}')">Change card</button><button class="light" onclick="planCashExchange('${id}')">Find an ATM</button></div>`:""}</div>
       <div class="menu-actions">${planned?`<button onclick="runCheck('${id}')">Run readiness check</button>`:""}<button class="light" onclick="showJourneyPayments('${id}')">View payments</button>${planned?`<button class="light" onclick="showCardSolution('${id}','CHANGE_CARD')">Change preferred card</button>`:""}</div>
       <h3>Recent activity</h3>${d.recentTransactions.length?d.recentTransactions.slice(0,3).map(transactionRow).join(""):"<p>No transactions yet.</p>"}`);
