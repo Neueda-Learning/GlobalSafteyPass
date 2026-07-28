@@ -26,13 +26,22 @@ public class TransactionService {
         Trip trip=trips.findByCustomerIdOrderByStartDateDesc(customer).stream().filter(t->t.getPreferredCardId().equals(r.cardId())&&!date.isBefore(t.getStartDate())&&!date.isAfter(t.getEndDate())).findFirst()
                 .orElseGet(()->trips.findByCustomerIdOrderByStartDateDesc(customer).stream().filter(t->t.getPreferredCardId().equals(r.cardId())).findFirst().orElse(null));
         String target=trip==null?(r.billingCurrency()==null?r.originalCurrency():r.billingCurrency()):trip.getBudgetCurrency();
-        ExchangeRateQuote quote=fx.rate(r.originalCurrency(),target,date);
-        BigDecimal estimated=r.originalAmount().multiply(quote.rate()).setScale(2,RoundingMode.HALF_UP);
+        String billingCurrency=(r.billingCurrency()==null?target:r.billingCurrency()).toUpperCase();
+        ExchangeRateQuote quote=fx.rate(r.originalCurrency(),billingCurrency,date);
+        BigDecimal billingAmount=r.billingAmount()==null
+                ?r.originalAmount().multiply(quote.rate()).setScale(2,RoundingMode.HALF_UP)
+                :r.billingAmount();
+
+        BigDecimal persistedRate=quote.rate();
+        if(r.billingAmount()!=null&&r.originalAmount().signum()!=0){
+            persistedRate=r.billingAmount().divide(r.originalAmount(),8,RoundingMode.HALF_UP);
+        }
+
         TravelTransaction t=TravelTransaction.builder().transactionId(r.transactionId()).customerId(customer).tripId(trip==null?null:trip.getId()).cardId(r.cardId())
                 .merchantName(r.merchantName()).merchantCountry(r.merchantCountry()).merchantCity(r.merchantCity()).merchantCategory(r.merchantCategory())
                 .originalAmount(r.originalAmount()).originalCurrency(r.originalCurrency().toUpperCase())
-                .billingAmount(r.billingAmount()==null?estimated:r.billingAmount()).billingCurrency(r.billingCurrency()==null?target:r.billingCurrency())
-                .exchangeRate(quote.rate()).transactionTime(r.transactionTime()).transactionType(r.transactionType()).status(r.status())
+                .billingAmount(billingAmount).billingCurrency(billingCurrency)
+                .exchangeRate(persistedRate).transactionTime(r.transactionTime()).transactionType(r.transactionType()).status(r.status())
                 .failureCode(r.failureCode()).recoveryStatus(r.status()==Enums.TransactionStatus.DECLINED?Enums.RecoveryStatus.PAYMENT_INTERRUPTED:null)
                 .recoveryUpdatedAt(r.status()==Enums.TransactionStatus.DECLINED?Instant.now():null).createdAt(Instant.now()).build();
         txs.save(t);audit.log(customer,"TRANSACTION_RECEIVED","TRANSACTION",t.getTransactionId(),"status="+t.getStatus());
