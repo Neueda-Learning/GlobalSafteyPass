@@ -13,7 +13,7 @@ import java.time.Duration;
 public class WebClientConfig {
     @Bean
     WebClient fxWebClient(@Value("${integration.fx.base-url}") String baseUrl,
-                          @Value("${integration.fx.timeout-seconds:3}") int timeout) {
+                          @Value("${integration.fx.timeout-seconds:8}") int timeout) {
         HttpClient client = HttpClient.create()
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, timeout * 1000)
                 .responseTimeout(Duration.ofSeconds(timeout))

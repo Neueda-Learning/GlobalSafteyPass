@@ -3,12 +3,15 @@ package com.travelassistant.service;
 import com.travelassistant.dto.ApiDtos.*;
 import com.travelassistant.model.*;
 import com.travelassistant.repository.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import java.time.*;
 import java.util.*;
 
 @Service
 public class JourneyExchangeRateService {
+    private static final Logger log=LoggerFactory.getLogger(JourneyExchangeRateService.class);
     private static final Map<String,String> DESTINATION_CURRENCY=Map.of(
             "Japan","JPY","France","EUR","Singapore","SGD","China","CNY",
             "United Kingdom","GBP","United States","USD","Hong Kong","HKD");
@@ -29,7 +32,7 @@ public class JourneyExchangeRateService {
                 "Destination currency could not be verified. Choose another card in Trip Details or plan to exchange cash on arrival.");
         capabilities.supportedCurrencies(card).stream()
                 .filter(currency->!currency.isBlank()&&!currency.equals(mainCurrency))
-                .forEach(currency->storeRate(card.getId(),mainCurrency,currency));
+            .forEach(currency->safeStoreRate(card.getId(),mainCurrency,currency));
         ExchangeRateQuote quote=rates.rate(mainCurrency,destinationCurrency,LocalDate.now());
         persist(card.getId(),mainCurrency,destinationCurrency,quote);
         String recommendation;
@@ -47,6 +50,11 @@ public class JourneyExchangeRateService {
     private void storeRate(String cardId,String source,String target){
         ExchangeRateQuote quote=rates.rate(source,target,LocalDate.now());
         persist(cardId,source,target,quote);
+    }
+    private void safeStoreRate(String cardId,String source,String target){
+        try{storeRate(cardId,source,target);}catch(RuntimeException ex){
+            log.warn("Skip FX cache prefetch for card {} pair {}->{}, reason: {}",cardId,source,target,ex.getMessage());
+        }
     }
     private void persist(String cardId,String source,String target,ExchangeRateQuote quote){
         CardFxRate stored=storedRates.findByCardIdAndTargetCurrency(cardId,target).orElseGet(()->CardFxRate.builder().id(UUID.randomUUID().toString()).cardId(cardId).targetCurrency(target).build());

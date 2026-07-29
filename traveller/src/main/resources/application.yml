@@ -28,7 +28,7 @@ integration:
   fx:
     base-url: ${FX_API_BASE_URL:https://api.frankfurter.dev}
     enabled: ${FX_API_ENABLED:true}
-    timeout-seconds: 3
+    timeout-seconds: 8
   fraud:
     mode: ${FRAUD_API_MODE:mock}
     base-url: ${FRAUD_API_BASE_URL:}

@@ -28,7 +28,10 @@ public class TripService {
         if(t.getStatus()!=Enums.TripStatus.PLANNED)throw new InvalidTripException("Only planned trips can be edited.");
         validate(customer,r);t.setDestinationCountry(r.destinationCountry());t.setDestinationCity(r.destinationCity());
         t.setStartDate(r.startDate());t.setEndDate(r.endDate());t.setBudget(r.budget());t.setBudgetCurrency(r.budgetCurrency().toUpperCase());
-        t.setPreferredCardId(r.preferredCardId());t.setUpdatedAt(Instant.now());trips.save(t);audit.log(customer,"TRIP_UPDATED","TRIP",id,"Trip updated");return map(t);
+        t.setPreferredCardId(r.preferredCardId());
+        if(r.currencySettlementMethod()!=null)t.setCurrencySettlementMethod(r.currencySettlementMethod());
+        if(r.currencyCheckPassed()!=null)t.setCurrencyCheckPassed(r.currencyCheckPassed());
+        t.setUpdatedAt(Instant.now());trips.save(t);audit.log(customer,"TRIP_UPDATED","TRIP",id,"Trip updated");return map(t);
     }
     @Transactional public void delete(String customer,String id){
         Trip t=owned(customer,id);
@@ -45,5 +48,5 @@ public class TripService {
         Card c=cards.findById(r.preferredCardId()).orElseThrow(()->new ResourceNotFoundException("Preferred card not found."));
         if(!c.getCustomerId().equals(customer))throw new ForbiddenException("Card does not belong to current customer.");
     }
-    public TripResponse map(Trip t){return new TripResponse(t.getId(),t.getDestinationCountry(),t.getDestinationCity(),t.getStartDate(),t.getEndDate(),t.getBudget(),t.getBudgetCurrency(),t.getPreferredCardId(),t.getStatus(),t.isCashExchangePlanned(),t.getCashExchangeMethod(),t.getCashExchangeAmountUsd(),t.getCashExchangeLocation(),t.getCashExchangePlannedAt());}
+    public TripResponse map(Trip t){return new TripResponse(t.getId(),t.getDestinationCountry(),t.getDestinationCity(),t.getStartDate(),t.getEndDate(),t.getBudget(),t.getBudgetCurrency(),t.getPreferredCardId(),t.getStatus(),t.isCashExchangePlanned(),t.getCashExchangeMethod(),t.getCashExchangeAmountUsd(),t.getCashExchangeLocation(),t.getCashExchangePlannedAt(),t.getCurrencySettlementMethod(),t.isCurrencyCheckPassed());}
 }

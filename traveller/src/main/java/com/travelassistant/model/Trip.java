@@ -25,4 +25,6 @@ public class Trip {
     @Column(precision=19, scale=2) private BigDecimal cashExchangeAmountUsd;
     private String cashExchangeLocation;
     private Instant cashExchangePlannedAt;
+    private String currencySettlementMethod;
+    private boolean currencyCheckPassed;
 }

@@ -29,6 +29,7 @@ public class DataSeeder {
             cards.save(card("card-expiring","customer-001","**** 9012","VISA",8,2026,true,Enums.CardStatus.ACTIVE,"account-002"));
             cards.save(card("card-frozen","customer-001","**** 3456","MASTERCARD",10,2028,true,Enums.CardStatus.FROZEN,"account-frozen"));
             cards.save(card("card-backup","customer-001","**** 7788","VISA",6,2030,true,Enums.CardStatus.ACTIVE,"account-low"));
+            cards.save(card("card-hkd","customer-001","**** 9999","VISA",3,2027,true,Enums.CardStatus.ACTIVE,"account-001"));
             cards.save(card("card-201","customer-002","**** 2201","VISA",6,2030,true,Enums.CardStatus.ACTIVE,"account-201"));
             configureCardCurrencies(cards);
             trips.save(trip("trip-tokyo","customer-001","Japan","Tokyo",LocalDate.of(2026,8,10),LocalDate.of(2026,8,18),new BigDecimal("2500"),"USD","card-002",Enums.TripStatus.PLANNED));
@@ -179,6 +180,7 @@ public class DataSeeder {
         configureCard(cards,"card-expiring","USD","EUR,GBP");
         configureCard(cards,"card-frozen","USD","SGD");
         configureCard(cards,"card-backup","USD","JPY,EUR");
+        configureCard(cards,"card-hkd","HKD","HKD,USD,CNY");
         configureCard(cards,"card-201","USD","JPY,EUR");
     }
     private void configureCard(CardRepository cards,String id,String mainCurrency,String supportedCurrencies){

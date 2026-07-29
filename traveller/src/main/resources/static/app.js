@@ -487,6 +487,7 @@ window.fixReadiness=async(tripId,ruleCode)=>{
     else if(ruleCode==="PAYMENT_LIMIT_LOW"){secureCardRequest("PAYMENT_LIMIT_CHANGE",cardId,`/api/travel/cards/${cardId}/payment-limit`,{method:"PUT",body:JSON.stringify({newLimit:2500})},()=>runCheck(tripId));return}
     else if(ruleCode==="WITHDRAWAL_LIMIT_LOW"){secureCardRequest("WITHDRAWAL_LIMIT_CHANGE",cardId,`/api/travel/cards/${cardId}/withdrawal-limit`,{method:"PUT",body:JSON.stringify({newLimit:1000})},()=>runCheck(tripId));return}
     else if(["CARD_EXPIRED","LOW_AVAILABLE_BALANCE","ACCOUNT_NOT_ACTIVE","NO_BACKUP_CARD"].includes(ruleCode)){showCardSolution(tripId,ruleCode);return}
+    else if(ruleCode==="CURRENCY_SELECTION_REQUIRED"){showCurrencyChoice(tripId);return}
     else if(["CURRENCY_UNKNOWN","CURRENCY_NOT_SUPPORTED"].includes(ruleCode)){showCurrencyGuidance(tripId,ruleCode);return}
     else{showCardSolution(tripId,ruleCode);return}
     await load();toast("Card setting updated");runCheck(tripId);
@@ -503,6 +504,34 @@ window.selectJourneyCard=async(tripId,cardId)=>{
   try{await api(`/api/travel/trips/${tripId}`,{method:"PUT",body:JSON.stringify({destinationCountry:t.destinationCountry,destinationCity:t.destinationCity,startDate:t.startDate,endDate:t.endDate,budget:t.budget,budgetCurrency:t.budgetCurrency,preferredCardId:cardId})});await load();toast("Preferred card updated");runCheck(tripId)}catch(e){toast(e.message)}
 };
 function showCurrencyGuidance(tripId,ruleCode="CURRENCY_UNKNOWN"){openSheet(`<button class="back" onclick="runCheck('${tripId}')">← Readiness check</button><span class="eyebrow">BACKUP PAYMENT</span><h2>${ruleCode==="CURRENCY_NOT_SUPPORTED"?"Card currency not supported":"Rate unavailable"}</h2><p>Change card or find a nearby ATM.</p><button class="bank-primary" onclick="showCardSolution('${tripId}','${ruleCode}')">Change card</button><button class="bank-secondary" onclick="planCashExchange('${tripId}')">Find nearby ATMs</button>`)};
+window.showCurrencyChoice=async(tripId)=>{
+  const trip=state.trips.find(t=>t.id===tripId);if(!trip)return;
+  openSheet(`<button class="back" onclick="runCheck('${tripId}')">← Readiness check</button><span class="eyebrow">PAYMENT CURRENCY</span>
+    <h2>How would you like to handle local currency?</h2>
+    <p>Your current card doesn't support the destination currency. Choose an option:</p>
+    <button class="bank-option-button" onclick="chooseCurrencySettlement('${tripId}','CARD_CHANGE')">
+      <span class="option-title">1. Change card</span>
+      <span class="option-desc">Select a different card that supports the local currency</span>
+    </button>
+    <button class="bank-option-button" onclick="chooseCurrencySettlement('${tripId}','USD_SETTLEMENT')">
+      <span class="option-title">2. Settle in USD</span>
+      <span class="option-desc">Pay in USD and convert at merchant's rate</span>
+    </button>
+    <button class="bank-option-button" onclick="chooseCurrencySettlement('${tripId}','LOCAL_ATM')">
+      <span class="option-title">3. Use local ATM</span>
+      <span class="option-desc">Withdraw local currency at ATM on arrival</span>
+    </button>`)
+};
+window.chooseCurrencySettlement=async(tripId,method)=>{
+  const trip=state.trips.find(t=>t.id===tripId);if(!trip)return;
+  try{
+    if(method==="CARD_CHANGE"){showCardSolution(tripId,"CURRENCY_NOT_SUPPORTED");return}
+    const update={destinationCountry:trip.destinationCountry,destinationCity:trip.destinationCity,startDate:trip.startDate,endDate:trip.endDate,budget:trip.budget,budgetCurrency:trip.budgetCurrency,preferredCardId:trip.preferredCardId,currencySettlementMethod:method,currencyCheckPassed:true};
+    if(method==="LOCAL_ATM"){update.cashExchangePlanned=true;update.cashExchangeMethod="ATM";}
+    await api(`/api/travel/trips/${tripId}`,{method:"PUT",body:JSON.stringify(update)});
+    await load();toast(`Currency handling set to: ${method==="USD_SETTLEMENT"?"USD Settlement":method==="LOCAL_ATM"?"Local ATM":"Card Change"}`);runCheck(tripId);
+  }catch(e){toast(e.message)}
+};
 window.planCashExchange=(tripId,origin="trip")=>{
   const trip=state.trips.find(t=>t.id===tripId);if(!trip)return;
   const back=origin==="overview"?`activate('home')`:`showJourney('${tripId}')`;

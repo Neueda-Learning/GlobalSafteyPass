@@ -16,13 +16,15 @@ public final class ApiDtos {
             @NotNull LocalDate endDate,
             @NotNull @DecimalMin(value="0.01") BigDecimal budget,
             @NotBlank @Pattern(regexp="[A-Za-z]{3}") String budgetCurrency,
-            @NotBlank String preferredCardId) {}
+            @NotBlank String preferredCardId,
+            String currencySettlementMethod,
+            Boolean currencyCheckPassed) {}
 
     public record TripResponse(String id, String destinationCountry, String destinationCity,
             LocalDate startDate, LocalDate endDate, BigDecimal budget, String budgetCurrency,
             String preferredCardId, TripStatus status, boolean cashExchangePlanned,
             String cashExchangeMethod,BigDecimal cashExchangeAmountUsd,String cashExchangeLocation,
-            Instant cashExchangePlannedAt) {}
+            Instant cashExchangePlannedAt, String currencySettlementMethod, boolean currencyCheckPassed) {}
 
     public record CashExchangePlanRequest(
             @NotNull @DecimalMin("20.00") BigDecimal usdAmount,
