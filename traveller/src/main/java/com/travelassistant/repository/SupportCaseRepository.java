@@ -7,4 +7,6 @@ import java.util.*;
 public interface SupportCaseRepository extends JpaRepository<SupportCase,String> {
     List<SupportCase> findByCustomerIdOrderByUpdatedAtDesc(String customerId);
     Optional<SupportCase> findFirstByCustomerIdAndTransactionIdOrderByCreatedAtDesc(String customerId,String transactionId);
+    Optional<SupportCase> findFirstByCustomerIdAndTransactionIdAndTypeOrderByCreatedAtDesc(
+            String customerId,String transactionId,com.travelassistant.model.Enums.CaseType type);
 }

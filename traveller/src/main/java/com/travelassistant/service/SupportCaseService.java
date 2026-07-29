@@ -27,13 +27,16 @@ public class SupportCaseService {
         return map(cases.save(support));
     }
     @Transactional public SupportCaseResponse openFraudCase(String customer,TravelTransaction transaction){
-        SupportCase support=cases.findFirstByCustomerIdAndTransactionIdOrderByCreatedAtDesc(customer,transaction.getTransactionId())
+        SupportCase support=cases.findFirstByCustomerIdAndTransactionIdAndTypeOrderByCreatedAtDesc(
+                        customer,transaction.getTransactionId(),Enums.CaseType.FRAUD_INVESTIGATION)
                 .orElseGet(()->SupportCase.builder().id(transaction.getFraudCaseReference()).customerId(customer)
                         .tripId(transaction.getTripId()).transactionId(transaction.getTransactionId())
                         .type(Enums.CaseType.FRAUD_INVESTIGATION).status(Enums.CaseStatus.UNDER_REVIEW)
                         .title("Fraud investigation · "+transaction.getMerchantName())
                         .currentUpdate("The card payment is disputed and the investigation team is reviewing it.")
                         .createdAt(Instant.now()).updatedAt(Instant.now()).build());
+        support.setTitle("Fraud investigation · "+transaction.getMerchantName());
+        support.setTripId(transaction.getTripId());
         return map(cases.save(support));
     }
     public SupportCaseResponse map(SupportCase c){return new SupportCaseResponse(c.getId(),c.getTripId(),c.getTransactionId(),c.getType(),c.getStatus(),c.getTitle(),c.getCurrentUpdate(),c.getCreatedAt(),c.getUpdatedAt());}

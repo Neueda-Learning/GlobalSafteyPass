@@ -28,7 +28,13 @@ public class PaymentRecoveryService {
         if(t.getRecoveryStatus()==Enums.RecoveryStatus.COMPLETED_AFTER_RETRY||t.getRecoveryStatus()==Enums.RecoveryStatus.COMPLETED_WITH_ALTERNATE_CARD)return response(customer,t);
         t.setRecoveryAttemptCount(t.getRecoveryAttemptCount()+1);t.setRecoveryStartedAt(Instant.now());
         t.setRecoveryStatus(Enums.RecoveryStatus.RECOVERY_IN_PROGRESS);t.setRecoveryUpdatedAt(Instant.now());repository.save(t);
-        if("NETWORK_ERROR".equals(t.getFailureCode())){
+        boolean securityCleared="FRAUD_BLOCK".equals(t.getFailureCode())&&alerts.findByTransactionId(t.getTransactionId()).stream()
+                .noneMatch(a->a.getStatus()==Enums.AlertStatus.OPEN||a.getStatus()==Enums.AlertStatus.REPORTED_FRAUD);
+        Card paymentCard=cards.findById(t.getCardId()).orElseThrow();
+        boolean limitNowSufficient="LIMIT_EXCEEDED".equals(t.getFailureCode())
+                &&paymentCard.getDailyPaymentLimit().compareTo(t.getBillingAmount())>=0;
+        if("NETWORK_ERROR".equals(t.getFailureCode())||limitNowSufficient
+                ||(securityCleared&&t.getTransactionType()==Enums.TransactionType.ONLINE_PURCHASE)){
             t.setStatus(Enums.TransactionStatus.APPROVED);t.setRecoveryStatus(Enums.RecoveryStatus.COMPLETED_AFTER_RETRY);
             t.setRecoveryCompletedAt(Instant.now());t.setRecoveryUpdatedAt(Instant.now());repository.save(t);
             audit.log(customer,"PAYMENT_RECOVERED","TRANSACTION",id,"Original authorization completed after network retry");
@@ -82,7 +88,12 @@ public class PaymentRecoveryService {
             case "INSUFFICIENT_FUNDS"->"The linked account does not currently have enough available funds for this payment.";
             case "FRAUD_BLOCK"->"We paused this payment because it needs a security confirmation.";
             default->"The payment could not be completed yet. We checked the card and prepared the safest next step.";};
-        String action=switch(code){case "NETWORK_ERROR"->"RETRY_PAYMENT";case "LIMIT_EXCEEDED"->"CHANGE_LIMIT";case "INSUFFICIENT_FUNDS"->"ADD_FUNDS";case "FRAUD_BLOCK"->"REVIEW_SECURITY";default->"CONTACT_SUPPORT";};
+        String action=switch(code){
+            case "NETWORK_ERROR"->"RETRY_PAYMENT";
+            case "LIMIT_EXCEEDED"->"CHANGE_LIMIT";
+            case "INSUFFICIENT_FUNDS"->"ADD_FUNDS";
+            case "FRAUD_BLOCK"->!noFraud?"REVIEW_SECURITY":t.getTransactionType()==Enums.TransactionType.ONLINE_PURCHASE?"RETRY_PAYMENT":"RETRY_AT_MERCHANT";
+            default->"CONTACT_SUPPORT";};
         Enums.RecoveryStatus status=t.getRecoveryStatus();
         if(status==null)status=t.getStatus()==Enums.TransactionStatus.APPROVED?Enums.RecoveryStatus.COMPLETED_AFTER_RETRY:
                 ("NETWORK_ERROR".equals(code)?Enums.RecoveryStatus.RETRY_AVAILABLE:Enums.RecoveryStatus.ACTION_REQUIRED);
@@ -101,7 +112,7 @@ public class PaymentRecoveryService {
         List<RecoveryCardOption> eligibleCards=noFraud
                 ?recommendations.eligibleCards(customer,t.getCardId(),t.getBillingAmount(),destinationCurrency):List.of();
         return new PaymentRecoveryResponse(t.getTransactionId(),status,t.getMerchantName(),t.getBillingAmount(),t.getBillingCurrency(),
-                t.getMerchantCity(),t.getMerchantCountry(),card.getMaskedCardNumber(),code,
+                t.getMerchantCity(),t.getMerchantCountry(),card.getId(),card.getMaskedCardNumber(),code,
                 "NETWORK_ERROR".equals(code)?92:85,explanation,safety,travel,action,
                 List.of("USE_ANOTHER_CARD","CONTACT_MERCHANT","CONTACT_BANK"),eligibleCards,checks,timeline);
     }

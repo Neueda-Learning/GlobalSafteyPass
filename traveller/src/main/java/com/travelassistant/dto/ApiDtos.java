@@ -99,7 +99,7 @@ public final class ApiDtos {
     public record RecoveryCardOption(String cardId,String maskedCardNumber,String cardType,
             String mainCurrency,List<String> supportedCurrencies,String recommendation) {}
     public record PaymentRecoveryResponse(String transactionId,RecoveryStatus status,String merchantName,
-            BigDecimal amount,String currency,String merchantCity,String merchantCountry,String maskedCardNumber,
+            BigDecimal amount,String currency,String merchantCity,String merchantCountry,String cardId,String maskedCardNumber,
             String reasonClassification,int confidence,String explanation,String safetyMessage,String travelContext,
             String recommendedAction,List<String> alternativeActions,List<RecoveryCardOption> eligibleCards,List<RecoveryCheck> checks,
             List<RecoveryTimelineEvent> timeline) {}
