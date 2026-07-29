@@ -1,4 +1,4 @@
-# Global Safety Pass - Group 2
+# Global Safety Pass - Group 2 (Js & Ms)
 
 Global Safety Pass is a mobile-banking travel support demo built with Java 21 and Spring Boot. It helps customers prepare their cards for a trip, monitor travel spending, recover declined payments, and respond to suspicious overseas transactions.
 
