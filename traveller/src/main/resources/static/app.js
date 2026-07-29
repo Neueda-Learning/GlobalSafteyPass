@@ -229,6 +229,34 @@ function dismissReadinessTodo(tripId,showToast=true){
     if(showToast)toast("Readiness passed. Switched to the next pending trip.");
   },360);
 }
+function failedReadinessIssues(){
+  const activeTrips=state.trips
+    .filter(t=>t.status!=="COMPLETED"&&t.status!=="CANCELLED")
+    .sort((a,b)=>a.startDate.localeCompare(b.startDate));
+  const issues=[];
+  activeTrips.forEach(trip=>{
+    const readiness=state.tripReadiness?.[trip.id];
+    if(!readiness?.checks)return;
+    readiness.checks.filter(c=>!c.passed).forEach(check=>issues.push({trip,check}));
+  });
+  return issues;
+}
+function renderReadinessIssueStack(){
+  const host=$("#readinessIssueStack");
+  if(!host)return;
+  const issues=failedReadinessIssues();
+  if(!issues.length){
+    host.hidden=true;
+    host.innerHTML="";
+    return;
+  }
+  host.hidden=false;
+  host.innerHTML=issues.map(({trip,check})=>`<article class="readiness-issue-card">
+      <b class="readiness-issue-title">! ${escapeHtml(check.message)}</b>
+      ${check.recommendedAction?`<p class="readiness-issue-desc">${escapeHtml(check.recommendedAction)}</p>`:""}
+      ${readinessAction(trip.id,check.ruleCode)}
+    </article>`).join("");
+}
 function renderReadinessTodoStack(){
   const host=$("#readinessTodoStack");
   if(!host)return;
@@ -453,6 +481,7 @@ async function load(){
       $("#attentionSection").style.display="none";
       renderHomeAssistant(null);
       renderReadinessTodoStack();
+      renderReadinessIssueStack();
       maybeShowFraudAlert();
       return;
     }
@@ -485,14 +514,13 @@ async function load(){
       catch{return [t.id,null];}
     })));
     state={trips,dashboard,alerts,cards,transactions,cases,tripMoney,tripReadiness};
-    const homeTrips=displayedTrips.filter(t=>!hasFailedReadiness(tripReadiness[t.id]));
-    $("#trips").innerHTML=(homeTrips.length?homeTrips.map(t=>`<article class="trip" role="button" tabindex="0" onclick="showJourney('${t.id}')">
+    $("#trips").innerHTML=(displayedTrips.length?displayedTrips.map(t=>`<article class="trip" role="button" tabindex="0" onclick="showJourney('${t.id}')">
       <span class="tag">${t.status}</span><span class="arrow">→</span>
       <h3>${t.destinationCity}, ${t.destinationCountry}</h3>
       <p>${t.startDate} — ${t.endDate} · ${currencyMoney(t.budget,t.budgetCurrency)}</p>
       ${readinessBadge(t.id)}
       ${state.tripMoney[t.id]?`<small class="trip-local">Remaining ${localRemaining(state.tripMoney[t.id].dashboard,state.tripMoney[t.id].fx)}</small>`:""}
-    </article>`).join(""):'<p class="empty">Trips with failed readiness checks are hidden from the home page.</p>');
+    </article>`).join(""):'<p class="empty">No upcoming journeys yet.</p>');
     const displayCurrency=(focusTrip.budgetCurrency||dashboard.currency||"USD").toUpperCase();
     const displayDashboard={...dashboard,currency:displayCurrency};
     $("#spent").textContent=currencyMoney(dashboard.spent,displayCurrency);
@@ -509,6 +537,7 @@ async function load(){
     const featuredCase=activeCases[0]||cases[0];
     $("#caseTracking").innerHTML=featuredCase?`<div class="section-head compact-head tracking-heading"><h2>Case tracking</h2><button class="icon-action" onclick="showCases()" aria-label="View all cases" title="View all cases"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M14 7l5 5-5 5"/></svg></button></div>${caseCard(featuredCase)}`:"";
     renderReadinessTodoStack();
+    renderReadinessIssueStack();
     maybeShowFraudAlert();
   }catch(e){toast(e.message)}
 }
@@ -569,7 +598,7 @@ async function runCheck(id="trip-tokyo"){
   try{
     const r=await api(`/api/travel/trips/${id}/readiness-check`,{method:"POST"});
     state.tripReadiness={...(state.tripReadiness||{}),[id]:r};
-    if(r.status==="READY")dismissReadinessTodo(id,false);else renderReadinessTodoStack();
+    if(r.status==="READY")dismissReadinessTodo(id,false);else{renderReadinessTodoStack();renderReadinessIssueStack();}
     if(id==="trip-tokyo"){
       $("#score").textContent=r.score+"/100";$("#ring span").textContent=r.score;
       $("#readinessText").hidden=false;$("#readinessText").textContent=r.status==="READY"?"Everything is ready. Have a great trip!":"A few settings need attention before you leave.";
@@ -590,6 +619,7 @@ window.runReadinessTodo=async tripId=>{
       dismissReadinessTodo(tripId);
       return;
     }
+    renderReadinessIssueStack();
     openReadinessSheet(tripId,r);
   }catch(e){toast(e.message)}
 };
@@ -847,6 +877,7 @@ function activate(page){
     $("#homePage").classList.remove("hidden");
     $("#sheet").classList.add("hidden");
     renderReadinessTodoStack();
+    renderReadinessIssueStack();
     $("#homePage").scrollTo({top:0,behavior:"smooth"});
     return;
   }

@@ -69,6 +69,11 @@ nav{position:static;left:auto;right:auto;bottom:auto;transform:none;width:100%;m
 .readiness-todo-meta b{font-size:10px;color:var(--muted)}
 .readiness-todo-card .menu-actions{margin-top:11px}
 .readiness-todo-card.exit{transform:translateX(120%);opacity:0}
+.readiness-issue-stack{display:flex;flex-direction:column;gap:10px;margin:14px 0 6px}
+.readiness-issue-card{background:#fff;border:1px solid #d6e2db;border-radius:18px;padding:16px}
+.readiness-issue-title{display:block;font:800 15px Manrope;color:#a2472e;margin:0 0 6px;line-height:1.35}
+.readiness-issue-desc{margin:0 0 4px;font-size:12px;color:var(--muted);line-height:1.45}
+.readiness-issue-card .readiness-action{margin-top:10px}
 .spending-advice{display:grid;gap:6px;background:var(--ink);color:white;border-radius:17px;padding:16px;margin:12px 0 17px}.spending-advice .eyebrow{color:#9db1a6}.spending-advice b{font:700 14px/1.45 Manrope}
 .budget-edit{width:100%;border:1px solid var(--line);background:white;border-radius:12px;padding:11px 13px;display:flex;justify-content:space-between;color:var(--green);font-weight:800;cursor:pointer}
 .case-card{background:#eef3ef;border:1px solid #d0dfd5;border-radius:17px;padding:15px;margin:10px 0;cursor:pointer}.case-top{display:flex;justify-content:space-between;gap:8px}.case-top span{color:var(--green);font-size:9px;font-weight:900;letter-spacing:.6px}.case-top b{font-size:10px;color:var(--muted)}.case-card h3{font:800 15px Manrope;margin:9px 0 4px}.case-card p{font-size:11px;line-height:1.45;color:#59655e;margin:0 0 7px}.case-card>small{font-size:9px;color:var(--muted)}.case-progress{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:12px}.case-progress i{height:4px;border-radius:5px;background:#d5ddd8}.case-progress i:first-child,.case-progress i.done{background:var(--green)}
