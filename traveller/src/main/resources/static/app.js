@@ -109,7 +109,13 @@ function renderCurrencyOptions(currencies,filter=""){
     ? rows.map(x=>`<button type="button" class="trip-picker-option ${isCurrencySelected(x,$("#currencyInput")?.value)?"selected":""}" data-value="${escapeHtml(currencyDisplay(x))}" aria-selected="${isCurrencySelected(x,$("#currencyInput")?.value)}">${escapeHtml(currencyDisplay(x))}</button>`).join("")
     : '<div class="trip-picker-empty">No match</div>';
 }
-async function bindTripReferenceControls({countryValue="",cityValue="",currencyValue=""}={}){
+function defaultCurrencyDisplay(currencies){
+  const rows=Array.isArray(currencies)?currencies:[];
+  const mainstream=rows.find(x=>x&&x.mainstreamForCountry);
+  const pick=mainstream||rows[0]||null;
+  return pick?currencyDisplay(pick):"";
+}
+async function bindTripReferenceControls({countryValue="",cityValue="",currencyValue="",preferCountryMainstream=false}={}){
   await ensureTripReference();
   const countryInput=$("#countryInput"),cityInput=$("#cityInput"),currencyInput=$("#currencyInput");
   const countryPanel=$("#countryPanel"),cityPanel=$("#cityPanel"),currencyPanel=$("#currencyPanel");
@@ -119,7 +125,7 @@ async function bindTripReferenceControls({countryValue="",cityValue="",currencyV
   renderCountryOptions();
   const initialCurrencies=await loadCurrencies("");
   renderCurrencyOptions(initialCurrencies,"");
-  currencyInput.value=currencyValue|| (initialCurrencies.length?currencyDisplay(initialCurrencies[0]):"");
+  currencyInput.value=currencyValue||defaultCurrencyDisplay(initialCurrencies);
 
   const refreshByCountry=async(resetCity=true)=>{
     const selected=resolveCountrySelection(countryInput.value);
@@ -129,7 +135,10 @@ async function bindTripReferenceControls({countryValue="",cityValue="",currencyV
     renderCityOptions(cities,cityInput?.value||"");
     renderCurrencyOptions(currencies,currencyInput?.value||"");
     if(resetCity)cityInput.value="";
-    if(!currencyInput.value&&currencies.length)currencyInput.value=currencyDisplay(currencies[0]);
+    if(preferCountryMainstream||!currencyInput.value){
+      const nextValue=defaultCurrencyDisplay(currencies);
+      if(nextValue)currencyInput.value=nextValue;
+    }
   };
 
   countryInput.onfocus=()=>{renderCountryOptions(countryInput.value);openTripPanel("#countryPanel")};
@@ -421,7 +430,7 @@ async function openCreateTrip(){
       <label>PREFERRED CARD<select name="preferredCardId" required>${cardOptions()}</select><small>The destination exchange rate is stored against this card when the journey is opened.</small></label>
       <button type="submit">Create trip</button>
     </form>`);
-  await bindTripReferenceControls();
+  await bindTripReferenceControls({preferCountryMainstream:true});
   $("#tripForm").onsubmit=createTrip;
 }
 async function createTrip(event){
