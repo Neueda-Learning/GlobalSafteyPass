@@ -38,6 +38,18 @@ function parseCurrencyCode(raw){
   return m?m[0]:value;
 }
 
+function isCountrySelected(option, currentValue){
+  const value=(currentValue||"").trim().toLowerCase();
+  return value && [option.name,countryDisplay(option),option.iso2,option.iso3].some(v=>(v||"").toLowerCase()===value);
+}
+
+function isCurrencySelected(option, currentValue){
+  const value=(currentValue||"").trim().toLowerCase();
+  if(!value)return false;
+  const code=parseCurrencyCode(value);
+  return [option.code,currencyDisplay(option)].some(v=>(v||"").toLowerCase()===value)||option.code.toLowerCase()===code.toLowerCase();
+}
+
 function closeTripPanels(){
   ["#countryPanel","#cityPanel","#currencyPanel"].forEach(id=>$(id)?.classList.remove("show"));
 }
@@ -57,7 +69,7 @@ function renderCountryOptions(filter=""){
   const q=filter.trim().toLowerCase();
   const rows=tripRef.countries.filter(c=>!q||[c.name,c.iso2,c.iso3].some(v=>(v||"").toLowerCase().includes(q)));
   list.innerHTML=rows.length
-    ? rows.map(c=>`<button type="button" class="trip-picker-option" data-value="${escapeHtml(countryDisplay(c))}">${escapeHtml(countryDisplay(c))}</button>`).join("")
+    ? rows.map(c=>`<button type="button" class="trip-picker-option ${isCountrySelected(c,$("#countryInput")?.value)?"selected":""}" data-value="${escapeHtml(countryDisplay(c))}" aria-selected="${isCountrySelected(c,$("#countryInput")?.value)}">${escapeHtml(countryDisplay(c))}</button>`).join("")
     : '<div class="trip-picker-empty">No match</div>';
 }
 async function loadCities(country){
@@ -79,7 +91,7 @@ function renderCityOptions(cities,filter=""){
   const q=filter.trim().toLowerCase();
   const rows=(cities||[]).filter(x=>!q||(x.name||"").toLowerCase().includes(q));
   list.innerHTML=rows.length
-    ? rows.map(x=>`<button type="button" class="trip-picker-option" data-value="${escapeHtml(x.name)}">${escapeHtml(x.name)}</button>`).join("")
+    ? rows.map(x=>`<button type="button" class="trip-picker-option ${((x.name||"").trim().toLowerCase()===(($("#cityInput")?.value||"").trim().toLowerCase()))?"selected":""}" data-value="${escapeHtml(x.name)}" aria-selected="${((x.name||"").trim().toLowerCase()===(($("#cityInput")?.value||"").trim().toLowerCase()))}">${escapeHtml(x.name)}</button>`).join("")
     : '<div class="trip-picker-empty">No match</div>';
 }
 function renderCurrencyOptions(currencies,filter=""){
@@ -87,20 +99,20 @@ function renderCurrencyOptions(currencies,filter=""){
   const q=filter.trim().toLowerCase();
   const rows=(currencies||[]).filter(x=>!q||[x.code,x.name].some(v=>(v||"").toLowerCase().includes(q)));
   list.innerHTML=rows.length
-    ? rows.map(x=>`<button type="button" class="trip-picker-option" data-value="${escapeHtml(currencyDisplay(x))}">${escapeHtml(currencyDisplay(x))}</button>`).join("")
+    ? rows.map(x=>`<button type="button" class="trip-picker-option ${isCurrencySelected(x,$("#currencyInput")?.value)?"selected":""}" data-value="${escapeHtml(currencyDisplay(x))}" aria-selected="${isCurrencySelected(x,$("#currencyInput")?.value)}">${escapeHtml(currencyDisplay(x))}</button>`).join("")
     : '<div class="trip-picker-empty">No match</div>';
 }
-async function bindTripReferenceControls(){
+async function bindTripReferenceControls({countryValue="",cityValue="",currencyValue=""}={}){
   await ensureTripReference();
   const countryInput=$("#countryInput"),cityInput=$("#cityInput"),currencyInput=$("#currencyInput");
   const countryPanel=$("#countryPanel"),cityPanel=$("#cityPanel"),currencyPanel=$("#currencyPanel");
 
-  countryInput.value="";
-  cityInput.value="";
+  countryInput.value=countryValue;
+  cityInput.value=cityValue;
   renderCountryOptions();
   const initialCurrencies=await loadCurrencies("");
   renderCurrencyOptions(initialCurrencies,"");
-  if(initialCurrencies.length)currencyInput.value=currencyDisplay(initialCurrencies[0]);
+  currencyInput.value=currencyValue|| (initialCurrencies.length?currencyDisplay(initialCurrencies[0]):"");
 
   const refreshByCountry=async(resetCity=true)=>{
     const selected=resolveCountrySelection(countryInput.value);
@@ -110,7 +122,7 @@ async function bindTripReferenceControls(){
     renderCityOptions(cities,cityInput?.value||"");
     renderCurrencyOptions(currencies,currencyInput?.value||"");
     if(resetCity)cityInput.value="";
-    if(currencies.length)currencyInput.value=currencyDisplay(currencies[0]);
+    if(!currencyInput.value&&currencies.length)currencyInput.value=currencyDisplay(currencies[0]);
   };
 
   countryInput.onfocus=()=>{renderCountryOptions(countryInput.value);openTripPanel("#countryPanel")};
@@ -269,20 +281,37 @@ window.openTripEditor=id=>{
   openSheet(`<button class="back" onclick="showJourney('${id}')">← Trip details</button>
     <span class="eyebrow">EDIT PLANNED TRIP</span><h2>Update your trip</h2>
     <form class="trip-form" id="editTripForm">
-      <label>DESTINATION COUNTRY<input name="destinationCountry" value="${escapeHtml(t.destinationCountry)}" required></label>
-      <label>CITY<input name="destinationCity" value="${escapeHtml(t.destinationCity)}"></label>
+      <label>DESTINATION COUNTRY / REGION
+        <div class="trip-picker-wrap">
+          <input class="trip-picker" id="countryInput" name="destinationCountry" placeholder="Search or choose country/region" autocomplete="off" value="${escapeHtml(t.destinationCountry)}" required>
+          <div class="trip-picker-panel" id="countryPanel"></div>
+        </div>
+      </label>
+      <label>CITY
+        <div class="trip-picker-wrap">
+          <input class="trip-picker" id="cityInput" name="destinationCity" placeholder="Search or choose city" autocomplete="off" value="${escapeHtml(t.destinationCity||"")}">
+          <div class="trip-picker-panel" id="cityPanel"></div>
+        </div>
+      </label>
       <div class="row"><label>START DATE<input name="startDate" type="date" min="${new Date().toISOString().slice(0,10)}" value="${t.startDate}" required></label>
       <label>END DATE<input name="endDate" type="date" min="${new Date().toISOString().slice(0,10)}" value="${t.endDate}" required></label></div>
       <div class="row"><label>BUDGET<input name="budget" type="number" min="0.01" step="0.01" value="${t.budget}" required></label>
-      <label>CURRENCY<input name="budgetCurrency" maxlength="3" value="${t.budgetCurrency}" pattern="[A-Za-z]{3}" required></label></div>
+      <label>CURRENCY
+        <div class="trip-picker-wrap">
+          <input class="trip-picker" id="currencyInput" name="budgetCurrency" placeholder="Search or choose currency" autocomplete="off" value="${escapeHtml(t.budgetCurrency)}" required>
+          <div class="trip-picker-panel" id="currencyPanel"></div>
+        </div>
+      </label></div>
       <label>PREFERRED CARD<select name="preferredCardId" required>${state.cards.filter(c=>c.status==="ACTIVE").map(c=>`<option value="${c.id}" ${c.id===t.preferredCardId?"selected":""}>${c.cardType} ${c.maskedCardNumber} · ${c.mainCurrency}</option>`).join("")}</select></label>
       <button type="submit">Save trip changes</button>
     </form>`);
-  $("#editTripForm").onsubmit=e=>updateTrip(e,id);
+  bindTripReferenceControls({countryValue:t.destinationCountry,cityValue:t.destinationCity||"",currencyValue:t.budgetCurrency}).then(()=>{
+    $("#editTripForm").onsubmit=e=>updateTrip(e,id);
+  });
 };
 async function updateTrip(event,id){
   event.preventDefault();const form=new FormData(event.currentTarget),payload=Object.fromEntries(form.entries());
-  payload.budget=Number(payload.budget);payload.budgetCurrency=payload.budgetCurrency.toUpperCase();
+  payload.budget=Number(payload.budget);payload.budgetCurrency=parseCurrencyCode(payload.budgetCurrency);
   if(payload.endDate<payload.startDate){toast("End date must be on or after the start date");return}
   const button=event.currentTarget.querySelector("button");button.disabled=true;button.textContent="Saving…";
   try{await api(`/api/travel/trips/${id}`,{method:"PUT",body:JSON.stringify(payload)});await load();toast("Trip updated");showJourney(id)}
