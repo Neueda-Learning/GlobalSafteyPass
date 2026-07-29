@@ -905,7 +905,11 @@ window.completeWithAlternateCard=async(transactionId,cardId)=>{
 function activate(page){
   if(page==="payments")page="transactions";if(page==="security")page="profile";
   activeRootPage=page;
-  document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===page));
+  document.querySelectorAll("nav button").forEach(b=>{
+    const active=b.dataset.page===page;
+    b.classList.toggle("active",active);
+    if(active)b.setAttribute("aria-current","page");else b.removeAttribute("aria-current");
+  });
   if(page==="home"){
     $("#contentPage").classList.add("hidden");
     $("#homePage").classList.remove("hidden");
@@ -1282,7 +1286,7 @@ window.showAlternativeAuth=masked=>{$("#authBody").innerHTML=`<button class="aut
   <button class="auth-method" onclick="sendSmsCode()"><b>Text message</b><small>Send a one-time code to ${masked}</small></button>`};
 window.showPinEntry=()=>{$("#authBody").innerHTML=`<button class="auth-link" onclick="restartAuth()">← Back</button><h2>Enter App PIN</h2><p>For this demo, use <b>2580</b>.</p><div class="auth-code"><input id="pinCode" maxlength="4" inputmode="numeric" autocomplete="one-time-code"></div><button class="bank-primary" onclick="verifyAuth('APP_PIN',$('#pinCode').value)">Verify PIN</button>`};
 window.sendSmsCode=async()=>{try{const sms=await api(`/api/auth/sms?challengeId=${authChallenge}`,{method:"POST"});$("#authBody").innerHTML=`<button class="auth-link" onclick="restartAuth()">← Back</button><h2>Enter text message code</h2><p>Code sent to ${sms.maskedPhone}. Demo code: <b>${sms.demoCode}</b></p><div class="auth-code"><input id="smsCode" maxlength="6" inputmode="numeric" autocomplete="one-time-code"></div><button class="bank-primary" onclick="verifyAuth('SMS_OTP',$('#smsCode').value)">Verify code</button>`}catch(e){toast(e.message)}};
-window.restartAuth=()=>{$("#authBody").innerHTML=`<h2>Welcome back</h2><p>Verify your identity to open Travel Assistant.</p><label class="auth-label">YOUR NAME<input id="authCustomer" value="Jessie Han" autocomplete="name"></label><button class="bank-primary" id="authStart">Continue securely</button>`;$("#authStart").onclick=startAuth};
+window.restartAuth=()=>{$("#authBody").innerHTML=`<h2 id="authTitle">Welcome back</h2><p>Verify your identity to open Travel Assistant.</p><label class="auth-label" for="authCustomer">YOUR NAME</label><input class="auth-customer" id="authCustomer" value="Jessie Han" autocomplete="name"><button class="bank-primary" id="authStart">Continue securely</button>`;$("#authStart").onclick=startAuth};
 window.signOut=async()=>{try{if(authToken)await api("/api/auth/logout",{method:"POST"})}catch(e){}showAuth();restartAuth()};
 $("#authStart").onclick=startAuth;
 updateGreeting();
