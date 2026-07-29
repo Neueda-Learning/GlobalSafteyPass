@@ -229,33 +229,67 @@ function dismissReadinessTodo(tripId,showToast=true){
     if(showToast)toast("Readiness passed. Switched to the next pending trip.");
   },360);
 }
-function failedReadinessIssues(){
+function tripsWithReadinessIssues(){
   const activeTrips=state.trips
     .filter(t=>t.status!=="COMPLETED"&&t.status!=="CANCELLED")
     .sort((a,b)=>a.startDate.localeCompare(b.startDate));
-  const issues=[];
+  const items=[];
   activeTrips.forEach(trip=>{
     const readiness=state.tripReadiness?.[trip.id];
     if(!readiness?.checks)return;
-    readiness.checks.filter(c=>!c.passed).forEach(check=>issues.push({trip,check}));
+    const firstFailed=readiness.checks.find(c=>!c.passed);
+    if(firstFailed)items.push({trip,check:firstFailed});
   });
-  return issues;
+  return items;
+}
+function readinessIssueCardHtml(trip,check,layer=""){
+  const failedCount=state.tripReadiness?.[trip.id]?.checks?.filter(c=>!c.passed).length||1;
+  const moreHint=failedCount>1?`<small class="readiness-issue-more">${failedCount-1} more to resolve after this</small>`:"";
+  const isTop=layer==="readiness-issue-top"||!layer;
+  return `<article class="readiness-issue-card ${layer}" data-trip-id="${trip.id}">
+    <div class="readiness-issue-meta"><small>READINESS ISSUE</small><b>${trip.startDate}</b></div>
+    <h3>${escapeHtml(trip.destinationCity||trip.destinationCountry)}, ${escapeHtml(trip.destinationCountry)}</h3>
+    <p class="readiness-issue-alert">! ${escapeHtml(check.message)}</p>
+    ${check.recommendedAction?`<p class="readiness-issue-desc">${escapeHtml(check.recommendedAction)}</p>`:""}
+    ${moreHint}
+    ${isTop?readinessAction(trip.id,check.ruleCode):""}
+  </article>`;
 }
 function renderReadinessIssueStack(){
   const host=$("#readinessIssueStack");
   if(!host)return;
-  const issues=failedReadinessIssues();
-  if(!issues.length){
+  const items=tripsWithReadinessIssues();
+  if(!items.length){
     host.hidden=true;
+    host.classList.remove("stacked","single");
     host.innerHTML="";
     return;
   }
+  host.classList.toggle("single",items.length===1);
+  host.classList.toggle("stacked",items.length>1);
+  if(items.length===1){
+    host.hidden=false;
+    const {trip,check}=items[0];
+    host.innerHTML=readinessIssueCardHtml(trip,check);
+    return;
+  }
+  const [first,second,third]=items;
+  const edge=()=>`<article class="readiness-issue-card readiness-issue-edge" aria-hidden="true"></article>`;
   host.hidden=false;
-  host.innerHTML=issues.map(({trip,check})=>`<article class="readiness-issue-card">
-      <b class="readiness-issue-title">! ${escapeHtml(check.message)}</b>
-      ${check.recommendedAction?`<p class="readiness-issue-desc">${escapeHtml(check.recommendedAction)}</p>`:""}
-      ${readinessAction(trip.id,check.ruleCode)}
-    </article>`).join("");
+  host.innerHTML=`${readinessIssueCardHtml(first.trip,first.check,"readiness-issue-top")}${second?edge():""}${third?edge():""}`;
+}
+function dismissReadinessIssue(tripId){
+  const card=document.querySelector(`#readinessIssueStack .readiness-issue-top[data-trip-id="${tripId}"]`)
+    ||document.querySelector(`#readinessIssueStack .readiness-issue-card[data-trip-id="${tripId}"]`);
+  if(!card){load();return;}
+  card.classList.add("exit");
+  setTimeout(()=>load(),360);
+}
+function updateReadinessAfterFix(tripId,readiness){
+  if(readiness)state.tripReadiness={...(state.tripReadiness||{}),[tripId]:readiness};
+  if(readiness?.status==="READY"){dismissReadinessTodo(tripId,false);return;}
+  if(hasFailedReadiness(readiness))dismissReadinessIssue(tripId);
+  else load();
 }
 function renderReadinessTodoStack(){
   const host=$("#readinessTodoStack");
@@ -655,7 +689,7 @@ window.selectJourneyCard=async(tripId,cardId)=>{
   try{
     await api(`/api/travel/trips/${tripId}`,{method:"PUT",body:JSON.stringify({destinationCountry:t.destinationCountry,destinationCity:t.destinationCity,startDate:t.startDate,endDate:t.endDate,budget:t.budget,budgetCurrency:t.budgetCurrency,preferredCardId:cardId})});
     const readiness=await runReadinessCheckSilently(tripId);
-    if(readiness?.status==="READY")dismissReadinessTodo(tripId);else await load();
+    updateReadinessAfterFix(tripId,readiness);
     toast(currencyCheckPassed(readiness)?"Check passed: currency support is now confirmed.":"Preferred card updated");
     showJourney(tripId);
   }catch(e){toast(e.message)}
@@ -664,7 +698,7 @@ async function applyCurrencyFallback(tripId,option,openAtm=false){
   try{
     await api(`/api/travel/trips/${tripId}/readiness/currency-fallback`,{method:"POST",body:JSON.stringify({option})});
     const readiness=await runReadinessCheckSilently(tripId);
-    if(readiness?.status==="READY")dismissReadinessTodo(tripId);else await load();
+    updateReadinessAfterFix(tripId,readiness);
     toast(currencyCheckPassed(readiness)?"Check passed: currency handling is now complete.":(option==="USD_SETTLEMENT"?"USD settlement accepted for this trip":"ATM cash withdrawal selected"));
     if(openAtm){
       planCashExchange(tripId);
@@ -739,7 +773,7 @@ window.selectAtmByIndex=async index=>{
   toast(`${atm.name} shown on map`);
   if(activeAtmTripId){
     const readiness=await runReadinessCheckSilently(activeAtmTripId);
-    if(readiness?.status==="READY")dismissReadinessTodo(activeAtmTripId);else await load();
+    updateReadinessAfterFix(activeAtmTripId,readiness);
     if(currencyCheckPassed(readiness))toast("Check passed: ATM cash plan has been recorded.");
   }
 };
