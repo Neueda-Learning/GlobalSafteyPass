@@ -1,13 +1,167 @@
 let authToken=localStorage.getItem("traveller_access_token")||"";
 const $=s=>document.querySelector(s);
-const money=n=>new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"}).format(n||0);
-const currencyMoney=(n,currency="USD")=>new Intl.NumberFormat("en-US",{style:"currency",currency:currency||"USD"}).format(n||0);
+const formatMoney=(n,currency="USD")=>{
+  const safeCurrency=(currency||"USD").toUpperCase();
+  try{return new Intl.NumberFormat("en-US",{style:"currency",currency:safeCurrency}).format(n||0)}
+  catch{return new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"}).format(n||0)}
+};
+const money=(n,currency)=>(formatMoney(n,currency||state.dashboard?.currency||"USD"));
+const currencyMoney=(n,currency="USD")=>formatMoney(n,currency);
+const dayCount=date=>Math.ceil((new Date(`${date}T12:00:00`)-new Date())/86400000);
 let state={trips:[],dashboard:null,alerts:[],cards:[],transactions:[],cases:[],tripMoney:{}};
 let activeRecovery=null;
 let activeAtmMap=null;
 let activeAnalyticsMap=null;
 let currentAtms=[];
 let atmSearchInFlight=false;
+const tripRef={countries:[],citiesByCountry:new Map(),currenciesByCountry:new Map()};
+let tripPickerOutsideHandlerBound=false;
+
+const countryDisplay=c=>`${c.name} (${c.iso2}/${c.iso3})`;
+const currencyDisplay=c=>`${c.code} - ${c.name}`;
+
+function resolveCountrySelection(raw){
+  const value=(raw||"").trim();
+  if(!value)return null;
+  return tripRef.countries.find(c=>
+    c.name.toLowerCase()===value.toLowerCase()
+    || countryDisplay(c).toLowerCase()===value.toLowerCase()
+    || c.iso2.toLowerCase()===value.toLowerCase()
+    || c.iso3.toLowerCase()===value.toLowerCase()
+  )||null;
+}
+
+function parseCurrencyCode(raw){
+  const value=(raw||"").trim().toUpperCase();
+  if(!value)return "";
+  const m=value.match(/^[A-Z]{3}/);
+  return m?m[0]:value;
+}
+
+function closeTripPanels(){
+  ["#countryPanel","#cityPanel","#currencyPanel"].forEach(id=>$(id)?.classList.remove("show"));
+}
+
+function openTripPanel(panelId){
+  closeTripPanels();
+  $(panelId)?.classList.add("show");
+}
+
+async function ensureTripReference(){
+  if(tripRef.countries.length)return;
+  const [{data:countries}]=await Promise.all([api("/api/public/reference/countries")]);
+  tripRef.countries=countries||[];
+}
+function renderCountryOptions(filter=""){
+  const list=$("#countryPanel");if(!list)return;
+  const q=filter.trim().toLowerCase();
+  const rows=tripRef.countries.filter(c=>!q||[c.name,c.iso2,c.iso3].some(v=>(v||"").toLowerCase().includes(q)));
+  list.innerHTML=rows.length
+    ? rows.map(c=>`<button type="button" class="trip-picker-option" data-value="${escapeHtml(countryDisplay(c))}">${escapeHtml(countryDisplay(c))}</button>`).join("")
+    : '<div class="trip-picker-empty">No match</div>';
+}
+async function loadCities(country){
+  if(!country)return [];
+  if(tripRef.citiesByCountry.has(country))return tripRef.citiesByCountry.get(country);
+  const {data}=await api(`/api/public/reference/cities?country=${encodeURIComponent(country)}`);
+  tripRef.citiesByCountry.set(country,data||[]);
+  return data||[];
+}
+async function loadCurrencies(country){
+  const key=country||"__all__";
+  if(tripRef.currenciesByCountry.has(key))return tripRef.currenciesByCountry.get(key);
+  const {data}=await api(`/api/public/reference/currencies${country?`?country=${encodeURIComponent(country)}`:""}`);
+  tripRef.currenciesByCountry.set(key,data||[]);
+  return data||[];
+}
+function renderCityOptions(cities,filter=""){
+  const list=$("#cityPanel");if(!list)return;
+  const q=filter.trim().toLowerCase();
+  const rows=(cities||[]).filter(x=>!q||(x.name||"").toLowerCase().includes(q));
+  list.innerHTML=rows.length
+    ? rows.map(x=>`<button type="button" class="trip-picker-option" data-value="${escapeHtml(x.name)}">${escapeHtml(x.name)}</button>`).join("")
+    : '<div class="trip-picker-empty">No match</div>';
+}
+function renderCurrencyOptions(currencies,filter=""){
+  const list=$("#currencyPanel");if(!list)return;
+  const q=filter.trim().toLowerCase();
+  const rows=(currencies||[]).filter(x=>!q||[x.code,x.name].some(v=>(v||"").toLowerCase().includes(q)));
+  list.innerHTML=rows.length
+    ? rows.map(x=>`<button type="button" class="trip-picker-option" data-value="${escapeHtml(currencyDisplay(x))}">${escapeHtml(currencyDisplay(x))}</button>`).join("")
+    : '<div class="trip-picker-empty">No match</div>';
+}
+async function bindTripReferenceControls(){
+  await ensureTripReference();
+  const countryInput=$("#countryInput"),cityInput=$("#cityInput"),currencyInput=$("#currencyInput");
+  const countryPanel=$("#countryPanel"),cityPanel=$("#cityPanel"),currencyPanel=$("#currencyPanel");
+
+  countryInput.value="";
+  cityInput.value="";
+  renderCountryOptions();
+  const initialCurrencies=await loadCurrencies("");
+  renderCurrencyOptions(initialCurrencies,"");
+  if(initialCurrencies.length)currencyInput.value=currencyDisplay(initialCurrencies[0]);
+
+  const refreshByCountry=async(resetCity=true)=>{
+    const selected=resolveCountrySelection(countryInput.value);
+    const country=selected?.name||countryInput.value.trim();
+    if(selected)countryInput.value=countryDisplay(selected);
+    const [cities,currencies]=await Promise.all([loadCities(country),loadCurrencies(country)]);
+    renderCityOptions(cities,cityInput?.value||"");
+    renderCurrencyOptions(currencies,currencyInput?.value||"");
+    if(resetCity)cityInput.value="";
+    if(currencies.length)currencyInput.value=currencyDisplay(currencies[0]);
+  };
+
+  countryInput.onfocus=()=>{renderCountryOptions(countryInput.value);openTripPanel("#countryPanel")};
+  countryInput.oninput=()=>{renderCountryOptions(countryInput.value);openTripPanel("#countryPanel")};
+  countryInput.onchange=()=>refreshByCountry(true);
+
+  cityInput.onfocus=()=>{
+    const key=(resolveCountrySelection(countryInput.value)?.name||countryInput.value||"").trim();
+    renderCityOptions(tripRef.citiesByCountry.get(key)||[],cityInput.value);
+    openTripPanel("#cityPanel");
+  };
+  cityInput.oninput=()=>{
+    const key=(resolveCountrySelection(countryInput.value)?.name||countryInput.value||"").trim();
+    renderCityOptions(tripRef.citiesByCountry.get(key)||[],cityInput.value);
+    openTripPanel("#cityPanel");
+  };
+
+  currencyInput.onfocus=()=>{
+    const key=(resolveCountrySelection(countryInput.value)?.name||countryInput.value||"").trim();
+    renderCurrencyOptions(tripRef.currenciesByCountry.get(key)||tripRef.currenciesByCountry.get("__all__")||[],currencyInput.value);
+    openTripPanel("#currencyPanel");
+  };
+  currencyInput.oninput=()=>{
+    const key=(resolveCountrySelection(countryInput.value)?.name||countryInput.value||"").trim();
+    renderCurrencyOptions(tripRef.currenciesByCountry.get(key)||tripRef.currenciesByCountry.get("__all__")||[],currencyInput.value);
+    openTripPanel("#currencyPanel");
+  };
+
+  countryPanel.onclick=async e=>{
+    const option=e.target.closest(".trip-picker-option");if(!option)return;
+    countryInput.value=option.dataset.value||"";
+    closeTripPanels();
+    await refreshByCountry(true);
+  };
+  cityPanel.onclick=e=>{
+    const option=e.target.closest(".trip-picker-option");if(!option)return;
+    cityInput.value=option.dataset.value||"";
+    closeTripPanels();
+  };
+  currencyPanel.onclick=e=>{
+    const option=e.target.closest(".trip-picker-option");if(!option)return;
+    currencyInput.value=option.dataset.value||"";
+    closeTripPanels();
+  };
+
+  if(!tripPickerOutsideHandlerBound){
+    document.addEventListener("click",e=>{if(!e.target.closest(".trip-picker-wrap"))closeTripPanels()});
+    tripPickerOutsideHandlerBound=true;
+  }
+}
+
 
 async function api(path,opt={}){
   const headers={"Content-Type":"application/json",...opt.headers};
@@ -22,7 +176,7 @@ function openSheet(html){
   $("#contentPage").innerHTML=html;$("#sheet").classList.add("hidden");
   $("#contentPage").scrollTo({top:0,behavior:"smooth"});
 }
-const journeyCard=t=>`<div class="menu-card" onclick="showJourney('${t.id}')" role="button"><h3>${t.destinationCity||t.destinationCountry}, ${t.destinationCountry}</h3><p>${t.startDate} — ${t.endDate} · ${t.status}</p><div class="amount">${money(t.budget)}</div><button class="inline-link">Open journey →</button></div>`;
+const journeyCard=t=>`<div class="menu-card" onclick="showJourney('${t.id}')" role="button"><h3>${t.destinationCity||t.destinationCountry}, ${t.destinationCountry}</h3><p>${t.startDate} — ${t.endDate} · ${t.status}</p><div class="amount">${currencyMoney(t.budget,t.budgetCurrency)}</div><button class="inline-link">Open journey →</button></div>`;
 const fraudReasonText={
   OUTSIDE_TRIP_DATE:"Outside your registered travel dates",OUTSIDE_DESTINATION:"Different from your trip destination",
   UNEXPECTED_CURRENCY:"Unusual currency for this destination",DUPLICATE_TRANSACTION:"Similar payment seen recently",
@@ -60,28 +214,47 @@ const alertCard=a=>{
 function cardOptions(){
   return state.cards.filter(c=>c.status==="ACTIVE").map(c=>`<option value="${c.id}">${c.cardType} ${c.maskedCardNumber} · main ${c.mainCurrency||"—"} · supports ${(c.supportedCurrencies||[]).join("/")||"none"}${c.overseasPaymentsEnabled?"":" · overseas off"}</option>`).join("");
 }
-function openCreateTrip(){
+async function openCreateTrip(){
   const start=new Date(Date.now()+7*86400000).toISOString().slice(0,10);
   const end=new Date(Date.now()+14*86400000).toISOString().slice(0,10);
   openSheet(`<button class="back" onclick="activate('trips')">← My journeys</button>
     <span class="eyebrow">PLAN AHEAD</span><h2>Create a trip</h2>
     <p>Add your destination and choose the card you plan to use.</p>
     <form class="trip-form" id="tripForm">
-      <label>DESTINATION COUNTRY<input name="destinationCountry" placeholder="e.g. Japan" required></label>
-      <label>CITY<input name="destinationCity" placeholder="e.g. Tokyo"></label>
+      <label>DESTINATION COUNTRY / REGION
+        <div class="trip-picker-wrap">
+          <input class="trip-picker" id="countryInput" name="destinationCountry" placeholder="Search or choose country/region (e.g. Hong Kong, HK)" autocomplete="off" required>
+          <div class="trip-picker-panel" id="countryPanel"></div>
+        </div>
+      </label>
+      <label>CITY
+        <div class="trip-picker-wrap">
+          <input class="trip-picker" id="cityInput" name="destinationCity" placeholder="Search or choose city" autocomplete="off">
+          <div class="trip-picker-panel" id="cityPanel"></div>
+        </div>
+      </label>
       <div class="row"><label>START DATE<input name="startDate" type="date" min="${new Date().toISOString().slice(0,10)}" value="${start}" required></label>
       <label>END DATE<input name="endDate" type="date" min="${new Date().toISOString().slice(0,10)}" value="${end}" required></label></div>
       <div class="row"><label>BUDGET<input name="budget" type="number" min="0.01" step="0.01" value="2500" required></label>
-      <label>CURRENCY<input name="budgetCurrency" maxlength="3" value="USD" pattern="[A-Za-z]{3}" required></label></div>
+      <label>CURRENCY
+        <div class="trip-picker-wrap">
+          <input class="trip-picker" id="currencyInput" name="budgetCurrency" placeholder="Search or choose currency (e.g. HKD)" autocomplete="off" required>
+          <div class="trip-picker-panel" id="currencyPanel"></div>
+        </div>
+      </label></div>
       <label>PREFERRED CARD<select name="preferredCardId" required>${cardOptions()}</select><small>The destination exchange rate is stored against this card when the journey is opened.</small></label>
       <button type="submit">Create trip</button>
     </form>`);
+  await bindTripReferenceControls();
   $("#tripForm").onsubmit=createTrip;
 }
 async function createTrip(event){
   event.preventDefault();
   const form=new FormData(event.currentTarget);
-  const payload=Object.fromEntries(form.entries());payload.budget=Number(payload.budget);payload.budgetCurrency=payload.budgetCurrency.toUpperCase();
+  const payload=Object.fromEntries(form.entries());
+  payload.budget=Number(payload.budget);
+  payload.destinationCountry=resolveCountrySelection(payload.destinationCountry)?.name||payload.destinationCountry.trim();
+  payload.budgetCurrency=parseCurrencyCode(payload.budgetCurrency);
   if(payload.endDate<payload.startDate){toast("End date must be on or after the start date");return}
   const button=event.currentTarget.querySelector("button");button.disabled=true;button.textContent="Creating…";
   try{
@@ -131,14 +304,43 @@ window.deleteTrip=async id=>{
 async function load(){
   try{
     updateGreeting();
-    const {data:trips}=await api("/api/travel/trips");
+    const tripsResponse=await api("/api/travel/trips");
+    const trips=Array.isArray(tripsResponse?.data)?tripsResponse.data:[];
     trips.sort((a,b)=>(a.status==="COMPLETED")-(b.status==="COMPLETED")||a.startDate.localeCompare(b.startDate));
+
+    if(!trips.length){
+      state={
+        trips:[],dashboard:{budget:0,spent:0,remaining:0,recentTransactions:[],currency:"USD",readinessStatus:"NOT_READY"},
+        alerts:[],cards:[],transactions:[],cases:[],tripMoney:{}
+      };
+      $("#trips").innerHTML='<p class="empty">No trips yet. Tap "New trip" to start planning.</p>';
+      $("#spent").textContent=money(0);
+      $("#remaining").innerHTML=money(0);
+      $("#budget").textContent=money(0);
+      $("#paymentIssue").innerHTML="";
+      $("#caseTracking").innerHTML="";
+      $("#attentionSection").style.display="none";
+      renderHomeAssistant(null);
+      maybeShowFraudAlert();
+      return;
+    }
+
     const focusTrip=trips.find(t=>t.status!=="COMPLETED"&&t.status!=="CANCELLED")||trips[0];
-    const [dashboard,focusFx,{data:alerts},{data:cards},{data:transactions},{data:cases}]=await Promise.all([
+    const [dashboardResp,focusFx,alertsResp,cardsResp,transactionsResp,casesResp]=await Promise.all([
       api(`/api/travel/trips/${focusTrip.id}/dashboard`),
       api(`/api/travel/trips/${focusTrip.id}/exchange-rate?_=${Date.now()}`,{headers:{"Cache-Control":"no-cache"}}),
       api("/api/travel/alerts"),api("/api/travel/cards"),api("/api/travel/transactions"),api("/api/travel/cases")
     ]);
+    const dashboard={
+      budget:0,spent:0,remaining:0,recentTransactions:[],currency:"USD",readinessStatus:"NOT_READY",
+      ...(dashboardResp||{})
+    };
+    dashboard.recentTransactions=Array.isArray(dashboard.recentTransactions)?dashboard.recentTransactions:[];
+    const alerts=Array.isArray(alertsResp?.data)?alertsResp.data:[];
+    const cards=Array.isArray(cardsResp?.data)?cardsResp.data:[];
+    const transactions=Array.isArray(transactionsResp?.data)?transactionsResp.data:[];
+    const cases=Array.isArray(casesResp?.data)?casesResp.data:[];
+
     const upcoming=trips.filter(t=>t.status!=="COMPLETED"&&t.status!=="CANCELLED");
     const tripMoney=Object.fromEntries(await Promise.all(upcoming.map(async t=>{
       if(t.id===focusTrip.id)return [t.id,{dashboard,fx:focusFx}];
@@ -155,11 +357,12 @@ async function load(){
     $("#spent").textContent=money(dashboard.spent);
     $("#remaining").innerHTML=`${money(dashboard.remaining)}<small>${localRemaining(dashboard,focusFx,true)}</small>`;
     $("#budget").textContent=money(dashboard.budget);
+
     const failed=dashboard.recentTransactions.find(t=>t.status==="DECLINED"&&t.failureCode==="NETWORK_ERROR")||dashboard.recentTransactions.find(t=>t.status==="DECLINED");
     const featuredByHero=renderHomeAssistant(failed);
     $("#attentionSection").style.display=failed&&!featuredByHero?"block":"none";
     $("#paymentIssue").innerHTML=failed?`<div class="issue-card interrupted-home" onclick="paymentHelp('${failed.transactionId}')">
-      <div class="issue-icon">!</div><div><small>PAYMENT INTERRUPTED</small><h3>Complete your ${failed.merchantName} payment</h3><p>${money(failed.billingAmount)} · We found the best next step</p></div><span class="chevron">→</span></div>`:"";
+      <div class="issue-icon">!</div><div><small>PAYMENT INTERRUPTED</small><h3>Complete your ${failed.merchantName} payment</h3><p>${currencyMoney(failed.billingAmount,failed.billingCurrency)} · We found the best next step</p></div><span class="chevron">→</span></div>`:"";
     const activeCases=cases.filter(c=>c.status!=="RESOLVED");
     const featuredCase=activeCases[0]||cases[0];
     $("#caseTracking").innerHTML=featuredCase?`<div class="section-head compact-head"><div><span class="eyebrow">CASE TRACKING</span><h2>${activeCases.length?"In progress":"Recent case"}</h2></div><button onclick="showCases()">View all</button></div>${caseCard(featuredCase)}`:"";
@@ -198,6 +401,7 @@ window.showCase=id=>{
 function renderHomeAssistant(failed){
   const next=state.trips.find(t=>t.status!=="COMPLETED"&&t.status!=="CANCELLED")||state.trips[0];
   const panel=$("#nextBestAction");
+  if(!panel)return false;
   if(!next){panel.hidden=true;return false}
   const openAlert=state.alerts.find(a=>a.status==="OPEN");
   const preferred=state.cards.find(c=>c.id===next.preferredCardId);
@@ -248,7 +452,7 @@ function showCardSolution(tripId,ruleCode){
   const trip=state.trips.find(t=>t.id===tripId),available=state.cards.filter(c=>c.status==="ACTIVE"&&c.id!==trip.preferredCardId);
   openSheet(`<button class="back" onclick="runCheck('${tripId}')">← Readiness check</button><span class="eyebrow">RECOMMENDED SOLUTION</span>
     <h2>Choose a better travel card</h2><p>${ruleCode==="LOW_AVAILABLE_BALANCE"?"Choose a card linked to an account with enough available funds.":"Select an active backup card for this journey."}</p>
-    ${available.map(c=>`<div class="menu-card"><h3>${c.cardType} ${c.maskedCardNumber}</h3><p>Main currency ${c.mainCurrency||"—"} · Supports ${(c.supportedCurrencies||[]).join(", ")||"none listed"} · Limit ${money(c.dailyPaymentLimit)}</p><button class="inline-link" onclick="selectJourneyCard('${tripId}','${c.id}')">Use for this trip →</button></div>`).join("")||"<p>No other active card is available. Contact secure banking support to arrange a replacement.</p>"}`);
+    ${available.map(c=>`<div class="menu-card"><h3>${c.cardType} ${c.maskedCardNumber}</h3><p>Main currency ${c.mainCurrency||"—"} · Supports ${(c.supportedCurrencies||[]).join(", ")||"none listed"} · Limit ${currencyMoney(c.dailyPaymentLimit,c.mainCurrency)}</p><button class="inline-link" onclick="selectJourneyCard('${tripId}','${c.id}')">Use for this trip →</button></div>`).join("")||"<p>No other active card is available. Contact secure banking support to arrange a replacement.</p>"}`);
 }
 window.selectJourneyCard=async(tripId,cardId)=>{
   const t=state.trips.find(x=>x.id===tripId);
@@ -318,6 +522,9 @@ function escapeHtml(value){return String(value||"").replace(/[&<>"']/g,c=>({"&":
 window.showJourney=async id=>{
   try{
     const trip=state.trips.find(t=>t.id===id),[d,fx]=await Promise.all([api(`/api/travel/trips/${id}/dashboard`),api(`/api/travel/trips/${id}/exchange-rate?_=${Date.now()}`,{headers:{"Cache-Control":"no-cache"}})]);
+    const card=state.cards.find(c=>c.id===trip.preferredCardId),used=Number(d.budgetUsagePercentage||0);
+    const budgetAdvice=used>100?"Spending is above the planned budget. Review recent purchases before using more funds.":used>75?"Most of the budget has been used. Keep a closer eye on the remaining days.":used>0?`${Math.round(used)}% of the budget has been used and ${currencyMoney(d.remaining,d.currency)} remains.`:"No spending yet. Your full travel budget is still available.";
+    const cardAdvice=fx.cardSupportsCurrency?`${card?.cardType||"Your card"} ${fx.maskedCardNumber} supports ${fx.destinationCurrency} and overseas payments are ${card?.overseasPaymentsEnabled?"enabled":"not enabled"}.`:`${card?.cardType||"Your card"} ${fx.maskedCardNumber} is not verified for this destination currency.`;
     const remainingLocal=localRemaining(d,fx,true);
     const planned=trip.status==="PLANNED";
     openSheet(`<button class="back" onclick="activate('trips')">← All journeys</button>
@@ -325,9 +532,11 @@ window.showJourney=async id=>{
       <p>${trip.startDate} — ${trip.endDate}</p>
       ${planned?`<div class="trip-manage"><button onclick="openTripEditor('${id}')">Edit trip</button><button class="danger-link" onclick="confirmDeleteTrip('${id}')">Delete</button></div>`:""}
       <div class="detail-grid">
-        <div><small>BUDGET</small><strong>${money(d.budget)}</strong></div>
-        <div><small>REMAINING</small><strong>${money(d.remaining)}<em>${remainingLocal}</em></strong></div>
-        <div><small>SPENT</small><strong>${money(d.spent)}</strong></div>
+
+        <div><small>BUDGET</small><strong>${currencyMoney(d.budget,d.currency)}</strong></div>
+        <div><small>REMAINING</small><strong>${currencyMoney(d.remaining,d.currency)}<em>${remainingLocal}</em></strong></div>
+        <div><small>SPENT</small><strong>${currencyMoney(d.spent,d.currency)}</strong></div>
+
         <div><small>TRANSACTIONS</small><strong>${d.transactionCount}</strong></div>
       </div>
       ${planned?`<button class="budget-edit" onclick="openBudgetEditor('${id}')">Adjust travel budget <span>→</span></button>`:""}
@@ -351,7 +560,7 @@ async function saveBudget(event,id){
 function transactionRow(t){
   const recovered=(t.recoveryStatus||"").startsWith("COMPLETED_"),interrupted=t.status==="DECLINED";
   const label=recovered?"✓ Paid after retry":interrupted?"● Payment interrupted · Action needed":t.status;
-  return `<div class="check ${interrupted?"interrupted":recovered?"recovered":""}"><b>${t.merchantName} · ${money(t.billingAmount)}</b>
+  return `<div class="check ${interrupted?"interrupted":recovered?"recovered":""}"><b>${t.merchantName} · ${currencyMoney(t.billingAmount,t.billingCurrency)}</b>
     <small>${t.transactionTime.slice(0,10)} · ${label}</small>
     ${interrupted||recovered?`<button class="inline-link" onclick="paymentHelp('${t.transactionId}')">${recovered?"View recovery timeline":"Complete this payment"} →</button>`:""}</div>`;
 }
