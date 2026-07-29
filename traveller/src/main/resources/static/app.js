@@ -13,9 +13,16 @@ let activeRecovery=null;
 let activeAtmMap=null;
 let activeAnalyticsMap=null;
 let currentAtms=[];
+let activeAtmTripId="";
 let atmSearchInFlight=false;
+let activeRootPage="home";
+let activeJourneyOrigin="home";
 const tripRef={countries:[],citiesByCountry:new Map(),currenciesByCountry:new Map()};
 let tripPickerOutsideHandlerBound=false;
+const CURRENCY_PASS_CODES=new Set(["CURRENCY_SUPPORT","USD_SETTLEMENT_CARD","USD_SETTLEMENT_ACCEPTED","ATM_CASH_PLANNED","CASH_EXCHANGE_PLANNED"]);
+const normalizeOverviewOrigin=origin=>origin==="trips"?"trips":"home";
+const overviewBackLabel=origin=>normalizeOverviewOrigin(origin)==="trips"?"My trips":"Overview";
+const overviewBackAction=origin=>`activate('${normalizeOverviewOrigin(origin)}')`;
 
 const countryDisplay=c=>`${c.name} (${c.iso2}/${c.iso3})`;
 const currencyDisplay=c=>`${c.code} - ${c.name}`;
@@ -180,8 +187,161 @@ async function api(path,opt={}){
   if(authToken)headers.Authorization=`Bearer ${authToken}`;
   const r=await fetch(path,{...opt,headers});
   if(!r.ok){const e=await r.json().catch(()=>({message:"Request failed"}));if(r.status===401&&path.startsWith("/api/travel"))showAuth();throw Error(e.message)}
-  return r.status===204?null:r.json();
+  if(r.status===204)return null;
+  const raw=await r.text();
+  if(!raw||!raw.trim())return null;
+  try{return JSON.parse(raw);}catch{return null;}
 }
+function currencyCheckPassed(readiness){
+  if(!readiness?.checks)return false;
+  return readiness.checks.some(c=>c.passed&&CURRENCY_PASS_CODES.has(c.ruleCode));
+}
+function hasFailedReadiness(readiness){
+  return Array.isArray(readiness?.checks)&&readiness.checks.some(c=>!c.passed);
+}
+async function runReadinessCheckSilently(tripId){
+  try{return await api(`/api/travel/trips/${tripId}/readiness-check`,{method:"POST"});}
+  catch{return null;}
+}
+function readinessBadge(tripId){
+  const readiness=state.tripReadiness?.[tripId];
+  if(!readiness)return `<button class="trip-readiness-badge pending" title="Readiness pending" aria-label="Readiness pending" onclick="showTripReadinessStatus('${tripId}',event)">·</button>`;
+  const pass=readiness.status==="READY";
+  return `<button class="trip-readiness-badge ${pass?"pass":"fail"}" title="${pass?"Readiness passed":"Readiness issue"}" aria-label="${pass?"Readiness passed":"Readiness issue"}" onclick="showTripReadinessStatus('${tripId}',event)">${pass?"✓":"!"}</button>`;
+}
+function pendingReadinessTrips(){
+  const activeTrips=state.trips
+    .filter(t=>t.status!=="COMPLETED"&&t.status!=="CANCELLED")
+    .sort((a,b)=>a.startDate.localeCompare(b.startDate));
+  return activeTrips.filter(t=>{
+    const readiness=state.tripReadiness?.[t.id];
+    if(!readiness)return true;
+    if(hasFailedReadiness(readiness))return false;
+    return readiness.status!=="READY";
+  });
+}
+function dismissReadinessTodo(tripId,showToast=true){
+  const card=document.querySelector(`#readinessTodoStack .readiness-todo-top[data-trip-id="${tripId}"]`);
+  if(!card){load();return;}
+  card.classList.add("exit");
+  setTimeout(async()=>{
+    await load();
+    if(showToast)toast("Readiness passed. Switched to the next pending trip.");
+  },360);
+}
+function tripsWithReadinessIssues(){
+  const activeTrips=state.trips
+    .filter(t=>t.status!=="COMPLETED"&&t.status!=="CANCELLED")
+    .sort((a,b)=>a.startDate.localeCompare(b.startDate));
+  const items=[];
+  activeTrips.forEach(trip=>{
+    const readiness=state.tripReadiness?.[trip.id];
+    if(!readiness?.checks)return;
+    const firstFailed=readiness.checks.find(c=>!c.passed);
+    if(firstFailed)items.push({trip,check:firstFailed});
+  });
+  return items;
+}
+function readinessIssueCardHtml(trip,check,layer=""){
+  const failedCount=state.tripReadiness?.[trip.id]?.checks?.filter(c=>!c.passed).length||1;
+  const moreHint=failedCount>1?`<small class="readiness-issue-more">${failedCount-1} more to resolve after this</small>`:"";
+  const isTop=layer==="readiness-issue-top"||!layer;
+  return `<article class="readiness-issue-card ${layer}" data-trip-id="${trip.id}">
+    <div class="readiness-issue-meta"><small>READINESS ISSUE</small><b>${trip.startDate}</b></div>
+    <h3>${escapeHtml(trip.destinationCity||trip.destinationCountry)}, ${escapeHtml(trip.destinationCountry)}</h3>
+    <p class="readiness-issue-alert">! ${escapeHtml(check.message)}</p>
+    ${check.recommendedAction?`<p class="readiness-issue-desc">${escapeHtml(check.recommendedAction)}</p>`:""}
+    ${moreHint}
+    ${isTop?readinessAction(trip.id,check.ruleCode):""}
+  </article>`;
+}
+function renderReadinessIssueStack(){
+  const host=$("#readinessIssueStack");
+  if(!host)return;
+  const items=tripsWithReadinessIssues();
+  if(!items.length){
+    host.hidden=true;
+    host.classList.remove("stacked","single");
+    host.innerHTML="";
+    return;
+  }
+  host.classList.toggle("single",items.length===1);
+  host.classList.toggle("stacked",items.length>1);
+  if(items.length===1){
+    host.hidden=false;
+    const {trip,check}=items[0];
+    host.innerHTML=readinessIssueCardHtml(trip,check);
+    return;
+  }
+  const [first,second,third]=items;
+  const edge=()=>`<article class="readiness-issue-card readiness-issue-edge" aria-hidden="true"></article>`;
+  host.hidden=false;
+  host.innerHTML=`${readinessIssueCardHtml(first.trip,first.check,"readiness-issue-top")}${second?edge():""}${third?edge():""}`;
+}
+function dismissReadinessIssue(tripId){
+  const card=document.querySelector(`#readinessIssueStack .readiness-issue-top[data-trip-id="${tripId}"]`)
+    ||document.querySelector(`#readinessIssueStack .readiness-issue-card[data-trip-id="${tripId}"]`);
+  if(!card){load();return;}
+  card.classList.add("exit");
+  setTimeout(()=>load(),360);
+}
+function updateReadinessAfterFix(tripId,readiness){
+  if(readiness)state.tripReadiness={...(state.tripReadiness||{}),[tripId]:readiness};
+  if(readiness?.status==="READY"){dismissReadinessTodo(tripId,false);return;}
+  if(hasFailedReadiness(readiness))dismissReadinessIssue(tripId);
+  else load();
+}
+function renderReadinessTodoStack(){
+  const host=$("#readinessTodoStack");
+  if(!host)return;
+  const pending=pendingReadinessTrips();
+  if(!pending.length){
+    host.hidden=true;
+    host.classList.remove("stacked","single");
+    host.innerHTML="";
+    return;
+  }
+  host.classList.toggle("single",pending.length===1);
+  host.classList.toggle("stacked",pending.length>1);
+  const [first,second,third]=pending;
+  if(pending.length===1){
+    host.hidden=false;
+    host.innerHTML=`<article class="readiness-todo-card" data-trip-id="${first.id}">
+      <div class="readiness-todo-meta"><small>READINESS TODO</small><b>${first.startDate}</b></div>
+      <h3>${escapeHtml(first.destinationCity||first.destinationCountry)}, ${escapeHtml(first.destinationCountry)}</h3>
+      <p>${state.tripReadiness?.[first.id]?"This trip still has readiness issues.":"Run readiness check for this new trip."}</p>
+      <div class="menu-actions"><button onclick="showTripReadinessStatus('${first.id}')">View readiness checklist</button><button class="light" onclick="showJourney('${first.id}')">View trip</button></div>
+    </article>`;
+    return;
+  }
+  const one=(trip,layer)=>trip?`<article class="readiness-todo-card ${layer}" data-trip-id="${trip.id}">
+      <div class="readiness-todo-meta"><small>READINESS TODO</small><b>${trip.startDate}</b></div>
+      <h3>${escapeHtml(trip.destinationCity||trip.destinationCountry)}, ${escapeHtml(trip.destinationCountry)}</h3>
+      <p>${state.tripReadiness?.[trip.id]?"This trip still has readiness issues.":"Run readiness check for this new trip."}</p>
+      ${layer==="readiness-todo-top"?`<div class="menu-actions"><button onclick="showTripReadinessStatus('${trip.id}')">View readiness checklist</button><button class="light" onclick="showJourney('${trip.id}')">View trip</button></div>`:""}
+    </article>`:"";
+  const edge=trip=>trip?`<article class="readiness-todo-card readiness-todo-edge" aria-hidden="true"></article>`:"";
+  host.hidden=false;
+  host.innerHTML=`${one(first,"readiness-todo-top")}${edge(second)}${edge(third)}`;
+}
+window.showTripReadinessStatus=async(tripId,event,origin)=>{
+  if(event){event.preventDefault();event.stopPropagation();}
+  const source=normalizeOverviewOrigin(origin||activeRootPage||activeJourneyOrigin);
+  const backLabel=overviewBackLabel(source);
+  const backAction=overviewBackAction(source);
+  let readiness=state.tripReadiness?.[tripId]||null;
+  if(!readiness){
+    try{readiness=await api(`/api/travel/trips/${tripId}/readiness`);}catch{readiness=null;}
+  }
+  if(!readiness){
+    openSheet(`<button class="back" onclick="${backAction}">← ${backLabel}</button><span class="eyebrow">READINESS STATUS</span><h2>No readiness check yet</h2><p>Run the check to generate a pass/fail checklist for this trip.</p><button class="bank-primary" onclick="runCheck('${tripId}')">Run readiness check</button>`);
+    return;
+  }
+  state.tripReadiness={...(state.tripReadiness||{}),[tripId]:readiness};
+  openSheet(`<button class="back" onclick="${backAction}">← ${backLabel}</button><span class="eyebrow">READINESS STATUS</span><h2>${readiness.status==="READY"?"All checks passed":"Checks need attention"}</h2>
+    ${readiness.checks.map(c=>`<div class="check ${c.passed?"":"fail"}"><b>${c.passed?"✓":"!"} ${c.message}</b>${c.recommendedAction?`<small>${c.recommendedAction}</small>`:""}${c.passed?"":readinessAction(tripId,c.ruleCode)}</div>`).join("")}
+    <button class="bank-secondary" onclick="runCheck('${tripId}')">Run check again</button>`);
+};
 function toast(text){const e=$("#toast");e.textContent=text;e.classList.add("show");setTimeout(()=>e.classList.remove("show"),2400)}
 function openSheet(html){
   $("#homePage").classList.add("hidden");$("#contentPage").classList.remove("hidden");
@@ -344,7 +504,7 @@ async function load(){
     if(!trips.length){
       state={
         trips:[],dashboard:{budget:0,spent:0,remaining:0,recentTransactions:[],currency:"USD",readinessStatus:"NOT_READY"},
-        alerts:[],cards:[],transactions:[],cases:[],tripMoney:{}
+        alerts:[],cards:[],transactions:[],cases:[],tripMoney:{},tripReadiness:{}
       };
       $("#trips").innerHTML='<p class="empty">No trips yet. Tap "New trip" to start planning.</p>';
       $("#spent").textContent=money(0);
@@ -354,6 +514,8 @@ async function load(){
       $("#caseTracking").innerHTML="";
       $("#attentionSection").style.display="none";
       renderHomeAssistant(null);
+      renderReadinessTodoStack();
+      renderReadinessIssueStack();
       maybeShowFraudAlert();
       return;
     }
@@ -380,13 +542,19 @@ async function load(){
       try{const [d,fx]=await Promise.all([api(`/api/travel/trips/${t.id}/dashboard`),api(`/api/travel/trips/${t.id}/exchange-rate?_=${Date.now()}`,{headers:{"Cache-Control":"no-cache"}})]);return [t.id,{dashboard:d,fx}]}
       catch(e){return [t.id,null]}
     })));
-    state={trips,dashboard,alerts,cards,transactions,cases,tripMoney};
-    $("#trips").innerHTML=(upcoming.length?upcoming:trips).map(t=>`<article class="trip" role="button" tabindex="0" onclick="showJourney('${t.id}')">
+    const displayedTrips=upcoming.length?upcoming:trips;
+    const tripReadiness=Object.fromEntries(await Promise.all(displayedTrips.map(async t=>{
+      try{return [t.id,await api(`/api/travel/trips/${t.id}/readiness`)];}
+      catch{return [t.id,null];}
+    })));
+    state={trips,dashboard,alerts,cards,transactions,cases,tripMoney,tripReadiness};
+    $("#trips").innerHTML=(displayedTrips.length?displayedTrips.map(t=>`<article class="trip" role="button" tabindex="0" onclick="showJourney('${t.id}')">
       <span class="tag">${t.status}</span><span class="arrow">→</span>
       <h3>${t.destinationCity}, ${t.destinationCountry}</h3>
       <p>${t.startDate} — ${t.endDate} · ${currencyMoney(t.budget,t.budgetCurrency)}</p>
+      ${readinessBadge(t.id)}
       ${state.tripMoney[t.id]?`<small class="trip-local">Remaining ${localRemaining(state.tripMoney[t.id].dashboard,state.tripMoney[t.id].fx)}</small>`:""}
-    </article>`).join("");
+    </article>`).join(""):'<p class="empty">No upcoming journeys yet.</p>');
     const displayCurrency=(focusTrip.budgetCurrency||dashboard.currency||"USD").toUpperCase();
     const displayDashboard={...dashboard,currency:displayCurrency};
     $("#spent").textContent=currencyMoney(dashboard.spent,displayCurrency);
@@ -402,6 +570,8 @@ async function load(){
     const activeCases=cases.filter(c=>c.status!=="RESOLVED");
     const featuredCase=activeCases[0]||cases[0];
     $("#caseTracking").innerHTML=featuredCase?`<div class="section-head compact-head tracking-heading"><h2>Case tracking</h2><button class="icon-action" onclick="showCases()" aria-label="View all cases" title="View all cases"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M14 7l5 5-5 5"/></svg></button></div>${caseCard(featuredCase)}`:"";
+    renderReadinessTodoStack();
+    renderReadinessIssueStack();
     maybeShowFraudAlert();
   }catch(e){toast(e.message)}
 }
@@ -453,7 +623,6 @@ function renderHomeAssistant(failed){
   if(openAlert){title="Confirm an unusual travel payment";detail=`Check ${openAlert.merchantName}, ${currencyMoney(openAlert.amount,openAlert.currency)} before we take action.`;button="Review payment";action=showAlerts}
   else if(failed){title="Resolve your declined payment";detail=`We found the likely reason ${failed.merchantName} was declined and prepared the next step.`;button="Fix payment";action=()=>paymentHelp(failed.transactionId);featuredPayment=true}
   else if(preferred&&!preferred.overseasPaymentsEnabled){title="Turn on overseas payments";detail=`Your preferred ${preferred.cardType} ${preferred.maskedCardNumber} is not yet enabled abroad.`;button="Enable securely";action=()=>cardAction(preferred.id,"enable-overseas-payments")}
-  else if(state.dashboard.readinessStatus!=="READY"){title="Complete your pre-travel check";detail="We’ll check card expiry, limits, balance, currency support and backup payment options.";button="Check trip readiness";action=()=>runCheck(next.id)}
   panel.hidden=!action;
   if(!action)return false;
   $("#assistantAction").textContent=title;$("#readinessText").textContent=detail;$("#readinessText").hidden=!detail;$("#assistantButton").textContent=button;$("#score").textContent=score;$("#checkBtn").onclick=action;
@@ -462,15 +631,32 @@ function renderHomeAssistant(failed){
 async function runCheck(id="trip-tokyo"){
   try{
     const r=await api(`/api/travel/trips/${id}/readiness-check`,{method:"POST"});
+    state.tripReadiness={...(state.tripReadiness||{}),[id]:r};
+    if(r.status==="READY")dismissReadinessTodo(id,false);else{renderReadinessTodoStack();renderReadinessIssueStack();}
     if(id==="trip-tokyo"){
       $("#score").textContent=r.score+"/100";$("#ring span").textContent=r.score;
       $("#readinessText").hidden=false;$("#readinessText").textContent=r.status==="READY"?"Everything is ready. Have a great trip!":"A few settings need attention before you leave.";
     }
-    openSheet(`<button class="back" onclick="showJourney('${id}')">← Journey details</button>
-      <h2>Readiness · ${r.score}/100</h2>
-      ${r.checks.map(c=>`<div class="check ${c.passed?"":"fail"}"><b>${c.passed?"✓":"!"} ${c.message}</b>${c.recommendedAction?`<small>${c.recommendedAction}</small>`:""}${c.passed?"":readinessAction(id,c.ruleCode)}</div>`).join("")}`);
+    openReadinessSheet(id,r);
   }catch(e){toast(e.message)}
 }
+function openReadinessSheet(id,r){
+  openSheet(`<button class="back" onclick="showJourney('${id}')">← Journey details</button>
+      <h2>Readiness · ${r.score}/100</h2>
+      ${r.checks.map(c=>`<div class="check ${c.passed?"":"fail"}"><b>${c.passed?"✓":"!"} ${c.message}</b>${c.recommendedAction?`<small>${c.recommendedAction}</small>`:""}${c.passed?"":readinessAction(id,c.ruleCode)}</div>`).join("")}`);
+}
+window.runReadinessTodo=async tripId=>{
+  try{
+    const r=await api(`/api/travel/trips/${tripId}/readiness-check`,{method:"POST"});
+    state.tripReadiness={...(state.tripReadiness||{}),[tripId]:r};
+    if(r.status==="READY"){
+      dismissReadinessTodo(tripId);
+      return;
+    }
+    renderReadinessIssueStack();
+    openReadinessSheet(tripId,r);
+  }catch(e){toast(e.message)}
+};
 function readinessAction(tripId,ruleCode){
   const labels={OVERSEAS_PAYMENT_DISABLED:"Enable overseas payments",ONLINE_PAYMENT_DISABLED:"Enable online payments",
     CARD_FROZEN:"Unfreeze card",PAYMENT_LIMIT_LOW:"Increase payment limit",WITHDRAWAL_LIMIT_LOW:"Increase ATM limit",
@@ -500,11 +686,38 @@ function showCardSolution(tripId,ruleCode){
 }
 window.selectJourneyCard=async(tripId,cardId)=>{
   const t=state.trips.find(x=>x.id===tripId);
-  try{await api(`/api/travel/trips/${tripId}`,{method:"PUT",body:JSON.stringify({destinationCountry:t.destinationCountry,destinationCity:t.destinationCity,startDate:t.startDate,endDate:t.endDate,budget:t.budget,budgetCurrency:t.budgetCurrency,preferredCardId:cardId})});await load();toast("Preferred card updated");runCheck(tripId)}catch(e){toast(e.message)}
+  try{
+    await api(`/api/travel/trips/${tripId}`,{method:"PUT",body:JSON.stringify({destinationCountry:t.destinationCountry,destinationCity:t.destinationCity,startDate:t.startDate,endDate:t.endDate,budget:t.budget,budgetCurrency:t.budgetCurrency,preferredCardId:cardId})});
+    const readiness=await runReadinessCheckSilently(tripId);
+    updateReadinessAfterFix(tripId,readiness);
+    toast(currencyCheckPassed(readiness)?"Check passed: currency support is now confirmed.":"Preferred card updated");
+    showJourney(tripId);
+  }catch(e){toast(e.message)}
 };
-function showCurrencyGuidance(tripId,ruleCode="CURRENCY_UNKNOWN"){openSheet(`<button class="back" onclick="runCheck('${tripId}')">← Readiness check</button><span class="eyebrow">BACKUP PAYMENT</span><h2>${ruleCode==="CURRENCY_NOT_SUPPORTED"?"Card currency not supported":"Rate unavailable"}</h2><p>Change card or find a nearby ATM.</p><button class="bank-primary" onclick="showCardSolution('${tripId}','${ruleCode}')">Change card</button><button class="bank-secondary" onclick="planCashExchange('${tripId}')">Find nearby ATMs</button>`)};
+async function applyCurrencyFallback(tripId,option,openAtm=false){
+  try{
+    await api(`/api/travel/trips/${tripId}/readiness/currency-fallback`,{method:"POST",body:JSON.stringify({option})});
+    const readiness=await runReadinessCheckSilently(tripId);
+    updateReadinessAfterFix(tripId,readiness);
+    toast(currencyCheckPassed(readiness)?"Check passed: currency handling is now complete.":(option==="USD_SETTLEMENT"?"USD settlement accepted for this trip":"ATM cash withdrawal selected"));
+    if(openAtm){
+      planCashExchange(tripId);
+      return;
+    }
+    runCheck(tripId);
+  }catch(e){toast(e.message)}
+}
+function showCurrencyGuidance(tripId,ruleCode="CURRENCY_UNKNOWN"){
+  openSheet(`<button class="back" onclick="runCheck('${tripId}')">← Readiness check</button><span class="eyebrow">CURRENCY SUPPORT</span>
+    <h2>${ruleCode==="CURRENCY_NOT_SUPPORTED"?"Currency handling needed":"Destination currency not verified"}</h2>
+    <p>If this card does not support the local currency, choose how to proceed for this trip.</p>
+    <button class="bank-primary" onclick="showCardSolution('${tripId}','${ruleCode}')">Switch to a supporting card</button>
+    <button class="bank-secondary" onclick="applyCurrencyFallback('${tripId}','USD_SETTLEMENT')">Accept USD settlement</button>
+    <button class="bank-secondary" onclick="applyCurrencyFallback('${tripId}','ATM_CASH',true)">Use ATM cash instead of USD settlement</button>`);
+}
 window.planCashExchange=(tripId,origin="trip")=>{
   const trip=state.trips.find(t=>t.id===tripId);if(!trip)return;
+  activeAtmTripId=tripId;
   const back=origin==="overview"?`activate('home')`:`showJourney('${tripId}')`;
   const backLabel=origin==="overview"?"Overview":"Trip details";
   openSheet(`<button class="back" onclick="${back}">← ${backLabel}</button><span class="eyebrow">ATM FINDER</span><h2>Find an ATM</h2>
@@ -554,24 +767,32 @@ function renderAtmMap(lat,lon,atms){
   L.circleMarker([lat,lon],{radius:8,color:"#0d6b4b",fillColor:"#d5f16b",fillOpacity:1,weight:3}).addTo(activeAtmMap).bindPopup("Search location");
   atms.forEach(atm=>L.marker([atm.latitude,atm.longitude]).addTo(activeAtmMap).bindPopup(`<b>${escapeHtml(atm.name)}</b><br>${escapeHtml(atm.address)}`));
 }
-window.selectAtmByIndex=index=>{
+window.selectAtmByIndex=async index=>{
   const atm=currentAtms[index];if(!atm)return;
   if(activeAtmMap)activeAtmMap.setView([atm.latitude,atm.longitude],16);
   toast(`${atm.name} shown on map`);
+  if(activeAtmTripId){
+    const readiness=await runReadinessCheckSilently(activeAtmTripId);
+    updateReadinessAfterFix(activeAtmTripId,readiness);
+    if(currencyCheckPassed(readiness))toast("Check passed: ATM cash plan has been recorded.");
+  }
 };
 function setAtmLoading(message){if($("#atmResults"))$("#atmResults").innerHTML=`<div class="atm-empty">${message}</div>`}
 function showAtmError(message){if($("#atmResults"))$("#atmResults").innerHTML=`<div class="atm-empty error">${escapeHtml(message)}</div>`}
 function shortPlace(label){return label.split(",").slice(0,3).join(",")}
 function escapeHtml(value){return String(value||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))}
-window.showJourney=async id=>{
+window.showJourney=async(id,origin)=>{
   try{
+    activeJourneyOrigin=normalizeOverviewOrigin(origin||activeRootPage);
+    const backLabel=overviewBackLabel(activeJourneyOrigin);
+    const backAction=overviewBackAction(activeJourneyOrigin);
     const trip=state.trips.find(t=>t.id===id),[d,fx]=await Promise.all([api(`/api/travel/trips/${id}/dashboard`),api(`/api/travel/trips/${id}/exchange-rate?_=${Date.now()}`,{headers:{"Cache-Control":"no-cache"}})]);
     const card=state.cards.find(c=>c.id===trip.preferredCardId),used=Number(d.budgetUsagePercentage||0);
     const budgetAdvice=used>100?"Spending is above the planned budget. Review recent purchases before using more funds.":used>75?"Most of the budget has been used. Keep a closer eye on the remaining days.":used>0?`${Math.round(used)}% of the budget has been used and ${currencyMoney(d.remaining,d.currency)} remains.`:"No spending yet. Your full travel budget is still available.";
     const cardAdvice=fx.cardSupportsCurrency?`${card?.cardType||"Your card"} ${fx.maskedCardNumber} supports ${fx.destinationCurrency} and overseas payments are ${card?.overseasPaymentsEnabled?"enabled":"not enabled"}.`:`${card?.cardType||"Your card"} ${fx.maskedCardNumber} is not verified for this destination currency.`;
     const remainingLocal=localRemaining(d,fx,true);
     const planned=trip.status==="PLANNED";
-    openSheet(`<button class="back" onclick="activate('trips')">← All journeys</button>
+    openSheet(`<button class="back" onclick="${backAction}">← ${backLabel}</button>
       <span class="eyebrow">${trip.status}</span><h2>${trip.destinationCity}, ${trip.destinationCountry}</h2>
       <p>${trip.startDate} — ${trip.endDate}</p>
       ${planned?`<div class="trip-manage"><button onclick="openTripEditor('${id}')">Edit trip</button><button class="danger-link" onclick="confirmDeleteTrip('${id}')">Delete</button></div>`:""}
@@ -683,8 +904,17 @@ window.completeWithAlternateCard=async(transactionId,cardId)=>{
 
 function activate(page){
   if(page==="payments")page="transactions";if(page==="security")page="profile";
+  activeRootPage=page;
   document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===page));
-  if(page==="home"){$("#contentPage").classList.add("hidden");$("#homePage").classList.remove("hidden");$("#sheet").classList.add("hidden");$("#homePage").scrollTo({top:0,behavior:"smooth"});return}
+  if(page==="home"){
+    $("#contentPage").classList.add("hidden");
+    $("#homePage").classList.remove("hidden");
+    $("#sheet").classList.add("hidden");
+    renderReadinessTodoStack();
+    renderReadinessIssueStack();
+    $("#homePage").scrollTo({top:0,behavior:"smooth"});
+    return;
+  }
   if(page==="trips"){
     const planned=state.trips.filter(t=>t.status==="PLANNED"||t.status==="ACTIVE");
     const history=state.trips.filter(t=>t.status==="COMPLETED")

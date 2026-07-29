@@ -58,6 +58,7 @@ public final class ApiDtos {
             int scoreImpact, String message, String recommendedAction) {}
     public record ReadinessResponse(String tripId, int score, ReadinessStatus status,
             List<ReadinessRuleResult> checks) {}
+    public record CurrencyFallbackRequest(@NotBlank String option) {}
     public record ExchangeRateQuote(String sourceCurrency, String targetCurrency,
             BigDecimal rate, LocalDate rateDate, String provider, boolean estimated) {}
     public record FailureExplanation(String transactionId, String failureCode, String title,
