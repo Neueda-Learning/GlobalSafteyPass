@@ -119,7 +119,7 @@
     }
     .member-card {
       text-align: center;
-      padding: 28px 16px;
+      padding: 18px 14px 20px;
     }
     .avatar {
       width: 72px;
@@ -133,8 +133,86 @@
       color: var(--green);
       background: linear-gradient(135deg, #d5f16b, #b8e06a);
     }
+    .member-photo {
+      width: 100%;
+      height: 230px;
+      object-fit: cover;
+      object-position: center;
+      margin: -4px auto 14px;
+      display: block;
+      border-radius: 14px;
+      background: #edf5f0;
+    }
+    .member-photo.milly { object-position: center 28%; }
+    .member-photo.jessie { object-position: 52% 32%; }
+    .member-photo.joanne { object-position: 48% 42%; }
+    .member-card .avatar.photo-placeholder {
+      width: 100%;
+      height: 230px;
+      border-radius: 14px;
+      margin: -4px auto 14px;
+      font-size: 2rem;
+    }
     .member-card strong { display: block; font-size: 1.05rem; }
     .member-card small { color: var(--muted); }
+    .team-lineup {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      height: 445px;
+      margin: 8px -10px 0;
+      align-items: stretch;
+    }
+    .team-person {
+      position: relative;
+      overflow: hidden;
+      text-align: center;
+      padding-top: 8px;
+      border-bottom: 2px solid #dce5df;
+    }
+    .team-person h3 {
+      color: var(--green);
+      font-size: 1.28rem;
+      margin: 0 0 4px;
+      position: relative;
+      z-index: 2;
+    }
+    .team-person p {
+      color: var(--muted);
+      font-size: 0.9rem;
+      font-weight: 700;
+      line-height: 1.35;
+      position: relative;
+      z-index: 2;
+    }
+    .team-cutout {
+      position: absolute;
+      left: 50%;
+      bottom: -2px;
+      transform: translateX(-50%);
+      width: 112%;
+      height: 345px;
+      object-fit: contain;
+      object-position: center bottom;
+    }
+    .team-person.milly .team-cutout { width: 126%; height: 360px; }
+    .team-person.jessie .team-cutout { width: 145%; height: 330px; }
+    .team-person.joanne .team-cutout { width: 126%; height: 340px; }
+    .team-missing {
+      position: absolute;
+      left: 50%;
+      bottom: 40px;
+      transform: translateX(-50%);
+      width: 150px;
+      height: 150px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #d5f16b, #b8e06a);
+      color: var(--green);
+      display: grid;
+      place-items: center;
+      font-size: 2.2rem;
+      font-weight: 800;
+    }
     .goal-list {
       margin-top: 18px;
       display: grid;
@@ -354,65 +432,58 @@
     .slide-3 .goal-item b { font-size: 1.35rem; display: block; margin-bottom: 6px; }
     .slide-3 .goal-item p { font-size: 1.15rem; }
 
-    /* Slide 4 — circular flow ring */
-    .flow-ring {
+    /* Alternative customer journey — linear story */
+    .journey-track {
       position: relative;
-      width: min(520px, 80vw);
-      height: min(520px, 80vw);
-      margin: -20px auto 0;
-    }
-    .flow-ring-center {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 130px;
-      height: 130px;
-      border-radius: 50%;
-      background: var(--green);
-      color: white;
       display: grid;
-      place-items: center;
-      text-align: center;
-      font-weight: 800;
-      font-size: 1.35rem;
-      line-height: 1.3;
-      box-shadow: 0 8px 24px rgba(13, 107, 75, 0.3);
-      z-index: 2;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 32px;
+      margin-top: 58px;
     }
-    .flow-ring-step {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      width: 148px;
-      margin: -36px 0 0 -74px;
-      transform: rotate(calc(var(--i) * 51.43deg)) translateY(calc(-1 * min(210px, 32vw))) rotate(calc(var(--i) * -51.43deg));
-      background: white;
-      border: 2px solid var(--green);
-      border-radius: 14px;
-      padding: 14px 12px;
-      text-align: center;
-      box-shadow: 0 6px 18px rgba(26, 46, 36, 0.08);
-    }
-    .flow-ring-step b {
-      display: block;
-      color: var(--green);
-      font-size: 1.2rem;
-      line-height: 1.35;
-      font-weight: 800;
-    }
-    .flow-ring::before {
+    .journey-track::before {
       content: "";
       position: absolute;
-      top: 50%;
-      left: 50%;
-      width: calc(min(420px, 64vw));
-      height: calc(min(420px, 64vw));
-      margin: calc(-1 * min(210px, 32vw)) 0 0 calc(-1 * min(210px, 32vw));
-      border: 2px dashed #b8d4c8;
-      border-radius: 50%;
+      top: 42px;
+      left: 15%;
+      right: 15%;
+      height: 4px;
+      background: linear-gradient(90deg, #0d6b4b, #80b760, #d5f16b);
+      border-radius: 99px;
       z-index: 0;
     }
+    .journey-stage {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+    }
+    .journey-number {
+      width: 84px;
+      height: 84px;
+      margin: 0 auto 22px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: var(--green);
+      color: white;
+      border: 8px solid var(--cream);
+      box-shadow: 0 8px 22px rgba(13, 107, 75, 0.22);
+      font-size: 1.7rem;
+      font-weight: 800;
+    }
+    .journey-stage:nth-child(2) .journey-number { background: #4d9167; }
+    .journey-stage:nth-child(3) .journey-number { background: #9abd5b; color: var(--ink); }
+    .journey-stage h3 {
+      color: var(--ink);
+      font-size: 1.55rem;
+      margin-bottom: 12px;
+    }
+    .journey-stage p {
+      max-width: 270px;
+      margin: 0 auto;
+      font-size: 1.05rem;
+      line-height: 1.55;
+    }
+    .journey-stage strong { color: var(--green); }
 
     /* Slide 7 — enlarged stats */
     .slide-7 .stats { gap: 20px; margin-top: 40px; }
@@ -562,6 +633,10 @@
       .slide { padding: 28px 24px 84px; }
       .grid-2, .grid-4, .demo-grid, .test-case-grid, .stats { grid-template-columns: 1fr; }
       .slide-apis .api-list { grid-template-columns: 1fr; }
+      .team-lineup { grid-template-columns: repeat(2, 1fr); height: auto; }
+      .team-person { min-height: 390px; }
+      .journey-track { grid-template-columns: 1fr; gap: 20px; margin-top: 24px; }
+      .journey-track::before { display: none; }
       .flow-arrow { display: none; }
     }
   </style>
@@ -572,9 +647,9 @@
     <section class="slide slide-1 active" data-slide="1">
       <div class="hero">
         <div>
-          <div class="eyebrow">Group 2 Presentation</div>
+          <div class="eyebrow">Mobile Banking Travel Assistant</div>
           <h1>Global Safety Pass</h1>
-          <p class="subtitle">A mobile-banking travel assistant that helps customers prepare cards, monitor overseas spending, recover failed payments, and respond to suspicious activity.</p>
+          <p class="subtitle">Travel smarter. Pay safer. Stay in control abroad.</p>
           <div class="badge">Team Js &amp; Ms</div>
         </div>
       </div>
@@ -584,27 +659,26 @@
     <section class="slide" data-slide="2">
       <div class="eyebrow">Our Team</div>
       <h2>Group Members</h2>
-      <p class="subtitle">Group 2 — Js &amp; Ms built the Travel Assistant demo as a full-stack banking journey from trip planning to payment recovery.</p>
-      <div class="grid-4">
-        <div class="card member-card">
-          <div class="avatar">ML</div>
-          <strong>Milly Li</strong>
-          <small>Backend &amp; Testing</small>
+      <div class="team-lineup">
+        <div class="team-person milly">
+          <h3>Milly Li</h3>
+          <p>Backend &amp; Testing</p>
+          <img class="team-cutout" src="pics/Milly-cutout.png" alt="Milly Li">
         </div>
-        <div class="card member-card">
-          <div class="avatar">JH</div>
-          <strong>Jessie Han</strong>
-          <small>Frontend &amp; ATM / Analytics</small>
+        <div class="team-person jessie">
+          <h3>Jessie Han</h3>
+          <p>Architecture &amp; Frontend</p>
+          <img class="team-cutout" src="pics/Jessie-cutout.png" alt="Jessie Han">
         </div>
-        <div class="card member-card">
-          <div class="avatar">JW</div>
-          <strong>Joanne Wang</strong>
-          <small>API &amp; Integrations</small>
+        <div class="team-person joanne">
+          <h3>Joanne Wang</h3>
+          <p>API &amp; External Integrations</p>
+          <img class="team-cutout" src="pics/Joanne-cutout.png" alt="Joanne Wang">
         </div>
-        <div class="card member-card">
-          <div class="avatar">MY</div>
-          <strong>Molly Yang</strong>
-          <small>Rules &amp; Documentation</small>
+        <div class="team-person">
+          <h3>Molly Yang</h3>
+          <p>UX Design &amp; Documentation</p>
+          <div class="team-missing">MY</div>
         </div>
       </div>
     </section>
@@ -612,28 +686,35 @@
     <!-- Slide 3 -->
     <section class="slide slide-3" data-slide="3">
       <div class="eyebrow">Project Purpose</div>
-      <h2>Why We Built This</h2>
+      <h2>Three Moments That Can Ruin a Trip</h2>
       <div class="goal-list">
-        <div class="goal-item"><span>1</span><div><b>Prepare cards before travelling</b><p>Help customers check readiness, limits, currency support, and backup cash options before departure.</p></div></div>
-        <div class="goal-item"><span>2</span><div><b>Track travel spending and exchange rates</b><p>Give customers a live budget view, indicative FX guidance, and spending insights during the journey.</p></div></div>
-        <div class="goal-item"><span>3</span><div><b>Review suspicious overseas transactions</b><p>Explain fraud signals clearly and let customers confirm, report, or freeze a card securely.</p></div></div>
-        <div class="goal-item"><span>4</span><div><b>Recover from failed payments</b><p>Turn declines into guided recovery with retry, alternate-card options, and support-case tracking.</p></div></div>
+        <div class="goal-item"><span>1</span><div><b>Still stressing the night before your trip, wondering if your card will actually work abroad?</b></div></div>
+        <div class="goal-item"><span>2</span><div><b>Ever had a payment fail on vacation with NO way to fix it?</b></div></div>
+        <div class="goal-item"><span>3</span><div><b>Terrified of unauthorized charges while abroad? What if you could spot and stop them in seconds?</b></div></div>
       </div>
     </section>
 
-    <!-- Slide 4 -->
+    <!-- Slide 4 — Customer journey -->
     <section class="slide" data-slide="4">
-      <div class="eyebrow">End-to-End Journey</div>
-      <h2>System Flow</h2>
-      <div class="flow-ring">
-        <div class="flow-ring-center">Customer<br>Journey</div>
-        <div class="flow-ring-step" style="--i:0"><b>1. User Login</b></div>
-        <div class="flow-ring-step" style="--i:1"><b>2. Create Journey</b></div>
-        <div class="flow-ring-step" style="--i:2"><b>3. Readiness Check</b></div>
-        <div class="flow-ring-step" style="--i:3"><b>4. Trip Spending</b></div>
-        <div class="flow-ring-step" style="--i:4"><b>5. Behaviour Monitoring</b></div>
-        <div class="flow-ring-step" style="--i:5"><b>6. Guided Resolution</b></div>
-        <div class="flow-ring-step" style="--i:6"><b>7. Trip Completion</b></div>
+      <div class="eyebrow">Customer Journey</div>
+      <h2>One Journey, Three Moments That Matter</h2>
+      <p class="subtitle">The experience follows the customer from confident preparation to safe recovery.</p>
+      <div class="journey-track">
+        <div class="journey-stage">
+          <div class="journey-number">1</div>
+          <h3>Before the flight</h3>
+          <p><strong>Check readiness</strong><br>Confirm the card, limits, currencies, and backup cash plan.</p>
+        </div>
+        <div class="journey-stage">
+          <div class="journey-number">2</div>
+          <h3>At the checkout</h3>
+          <p><strong>Recover a failed payment</strong><br>Explain the decline and guide the safest next action.</p>
+        </div>
+        <div class="journey-stage">
+          <div class="journey-number">3</div>
+          <h3>When something looks wrong</h3>
+          <p><strong>Respond to fraud</strong><br>Explain the signal, verify the customer, and protect the card.</p>
+        </div>
       </div>
     </section>
 
@@ -672,46 +753,50 @@
     <!-- Slide 6 -->
     <section class="slide" data-slide="6">
       <div class="eyebrow">Architecture</div>
-      <h2>Traveller Assistant Application</h2>
-      <p class="subtitle">Spring Boot backend with a responsive web UI, rule engine, and external service adapters.</p>
+      <h2>One Experience, Separated into Clear Service Layers</h2>
       <div class="arch-wrap">
-        <svg viewBox="0 0 980 450" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Architecture diagram">
+        <svg viewBox="0 0 980 430" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Layered application architecture">
           <defs>
             <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#0d6b4b"/><stop offset="100%" stop-color="#145f47"/></linearGradient>
+            <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#0d6b4b"/></marker>
           </defs>
-          <rect x="20" y="20" width="940" height="70" rx="16" fill="url(#g1)"/>
-          <text x="490" y="62" fill="white" font-size="22" font-weight="700" text-anchor="middle">Responsive Web UI (HTML / CSS / JavaScript)</text>
-          <text x="490" y="115" fill="#6b7a72" font-size="14" text-anchor="middle">ATM Finder · Analytics · Readiness · Recovery · Fraud Alerts</text>
-          <line x1="490" y1="90" x2="490" y2="135" stroke="#0d6b4b" stroke-width="2"/>
-          <rect x="300" y="145" width="380" height="58" rx="14" fill="#edf5f0" stroke="#0d6b4b"/>
-          <text x="490" y="180" fill="#0d6b4b" font-size="18" font-weight="700" text-anchor="middle">REST Controllers + Security Context</text>
-          <line x1="490" y1="203" x2="490" y2="235" stroke="#0d6b4b" stroke-width="2"/>
-          <rect x="70" y="245" width="200" height="72" rx="14" fill="#fff" stroke="#dce5df"/>
-          <text x="170" y="275" fill="#1a2e24" font-size="15" font-weight="700" text-anchor="middle">Trip Services</text>
-          <text x="170" y="298" fill="#6b7a72" font-size="12" text-anchor="middle">CRUD · Readiness · FX</text>
-          <rect x="290" y="245" width="200" height="72" rx="14" fill="#fff" stroke="#dce5df"/>
-          <text x="390" y="275" fill="#1a2e24" font-size="15" font-weight="700" text-anchor="middle">Card Services</text>
-          <text x="390" y="298" fill="#6b7a72" font-size="12" text-anchor="middle">Limits · Freeze · Controls</text>
-          <rect x="510" y="245" width="200" height="72" rx="14" fill="#fff" stroke="#dce5df"/>
-          <text x="610" y="275" fill="#1a2e24" font-size="15" font-weight="700" text-anchor="middle">Transaction Services</text>
-          <text x="610" y="298" fill="#6b7a72" font-size="12" text-anchor="middle">Recovery · Support Cases</text>
-          <rect x="730" y="245" width="180" height="72" rx="14" fill="#fff" stroke="#dce5df"/>
-          <text x="820" y="275" fill="#1a2e24" font-size="15" font-weight="700" text-anchor="middle">Fraud Services</text>
-          <text x="820" y="298" fill="#6b7a72" font-size="12" text-anchor="middle">Rules · Alerts · Profile</text>
-          <line x1="170" y1="317" x2="170" y2="332" stroke="#0d6b4b" stroke-width="2"/>
-          <line x1="390" y1="317" x2="390" y2="332" stroke="#0d6b4b" stroke-width="2"/>
-          <line x1="610" y1="317" x2="610" y2="332" stroke="#0d6b4b" stroke-width="2"/>
-          <line x1="820" y1="317" x2="820" y2="332" stroke="#0d6b4b" stroke-width="2"/>
-          <rect x="250" y="332" width="480" height="46" rx="14" fill="#d5f16b" stroke="#0d6b4b"/>
-          <text x="490" y="361" fill="#1a2e24" font-size="16" font-weight="700" text-anchor="middle">Repositories · MySQL / H2 · Audit Logs</text>
-          <line x1="170" y1="332" x2="170" y2="395" stroke="#0d6b4b" stroke-width="2" stroke-dasharray="5,4"/>
-          <line x1="390" y1="332" x2="390" y2="395" stroke="#0d6b4b" stroke-width="2" stroke-dasharray="5,4"/>
-          <rect x="70" y="395" width="170" height="48" rx="14" fill="#fff" stroke="#dce5df"/>
-          <text x="155" y="419" fill="#1a2e24" font-size="13" font-weight="700" text-anchor="middle">Frankfurter FX</text>
-          <text x="155" y="436" fill="#6b7a72" font-size="11" text-anchor="middle">Live rates</text>
-          <rect x="290" y="395" width="170" height="48" rx="14" fill="#fff" stroke="#dce5df"/>
-          <text x="375" y="419" fill="#1a2e24" font-size="13" font-weight="700" text-anchor="middle">OpenStreetMap</text>
-          <text x="375" y="436" fill="#6b7a72" font-size="11" text-anchor="middle">ATM map search</text>
+          <rect x="24" y="18" width="932" height="62" rx="16" fill="url(#g1)"/>
+          <text x="490" y="45" fill="white" font-size="20" font-weight="700" text-anchor="middle">Customer Experience</text>
+          <text x="490" y="66" fill="#d9efe4" font-size="13" text-anchor="middle">Responsive Web UI · Readiness · Payments · Fraud Alerts · ATM Finder</text>
+
+          <line x1="490" y1="80" x2="490" y2="107" stroke="#0d6b4b" stroke-width="2.5" marker-end="url(#arrow)"/>
+          <rect x="230" y="110" width="520" height="54" rx="14" fill="#edf5f0" stroke="#0d6b4b" stroke-width="1.5"/>
+          <text x="490" y="134" fill="#0d6b4b" font-size="17" font-weight="700" text-anchor="middle">Secured REST API</text>
+          <text x="490" y="153" fill="#6b7a72" font-size="12" text-anchor="middle">Authentication · Customer isolation · Step-up verification</text>
+
+          <line x1="490" y1="164" x2="490" y2="190" stroke="#0d6b4b" stroke-width="2.5" marker-end="url(#arrow)"/>
+          <rect x="24" y="194" width="220" height="82" rx="15" fill="#fff" stroke="#dce5df"/>
+          <text x="134" y="225" fill="#1a2e24" font-size="16" font-weight="700" text-anchor="middle">Journey &amp; Readiness</text>
+          <text x="134" y="249" fill="#6b7a72" font-size="12" text-anchor="middle">Trips · Card checks · FX</text>
+          <rect x="262" y="194" width="220" height="82" rx="15" fill="#fff" stroke="#dce5df"/>
+          <text x="372" y="225" fill="#1a2e24" font-size="16" font-weight="700" text-anchor="middle">Payment Recovery</text>
+          <text x="372" y="249" fill="#6b7a72" font-size="12" text-anchor="middle">Explain · Retry · Alternate card</text>
+          <rect x="500" y="194" width="220" height="82" rx="15" fill="#fff" stroke="#dce5df"/>
+          <text x="610" y="225" fill="#1a2e24" font-size="16" font-weight="700" text-anchor="middle">Fraud Monitoring</text>
+          <text x="610" y="249" fill="#6b7a72" font-size="12" text-anchor="middle">Rules · Alerts · Card controls</text>
+          <rect x="738" y="194" width="218" height="82" rx="15" fill="#fff" stroke="#dce5df"/>
+          <text x="847" y="225" fill="#1a2e24" font-size="16" font-weight="700" text-anchor="middle">Support &amp; Audit</text>
+          <text x="847" y="249" fill="#6b7a72" font-size="12" text-anchor="middle">Cases · Timeline · Audit logs</text>
+
+          <line x1="490" y1="276" x2="490" y2="300" stroke="#0d6b4b" stroke-width="2.5" marker-end="url(#arrow)"/>
+          <rect x="24" y="304" width="288" height="82" rx="15" fill="#d5f16b" stroke="#0d6b4b"/>
+          <text x="168" y="334" fill="#1a2e24" font-size="16" font-weight="700" text-anchor="middle">Application Data</text>
+          <text x="168" y="359" fill="#33443c" font-size="12" text-anchor="middle">JPA repositories · MySQL / H2</text>
+          <rect x="346" y="304" width="288" height="82" rx="15" fill="#edf5f0" stroke="#0d6b4b"/>
+          <text x="490" y="334" fill="#0d6b4b" font-size="16" font-weight="700" text-anchor="middle">Banking Adapters</text>
+          <text x="490" y="359" fill="#33443c" font-size="12" text-anchor="middle">Card system · Fraud detection</text>
+          <rect x="668" y="304" width="288" height="82" rx="15" fill="#fff" stroke="#0d6b4b"/>
+          <text x="812" y="334" fill="#0d6b4b" font-size="16" font-weight="700" text-anchor="middle">Travel Data Providers</text>
+          <text x="812" y="359" fill="#33443c" font-size="12" text-anchor="middle">Frankfurter · CountriesNow · OSM</text>
+
+          <text x="134" y="410" fill="#6b7a72" font-size="11" text-anchor="middle">Store customer and journey state</text>
+          <text x="490" y="410" fill="#6b7a72" font-size="11" text-anchor="middle">Keep core banking dependencies replaceable</text>
+          <text x="812" y="410" fill="#6b7a72" font-size="11" text-anchor="middle">Isolate external API integrations</text>
         </svg>
       </div>
     </section>
