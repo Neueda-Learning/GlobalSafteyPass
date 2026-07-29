@@ -15,6 +15,7 @@ public class DataSeeder {
             TransactionRepository txs,FraudAlertRepository alerts,SupportCaseRepository cases){
         return args->{
             if(cards.count()>0){
+                                ensureVirtualTravelCard(cards);
                 configureCardCurrencies(cards);
                 if(!trips.existsById("trip-expired-card"))trips.save(trip("trip-expired-card","customer-001","France","Nice",LocalDate.of(2026,10,2),LocalDate.of(2026,10,12),new BigDecimal("1900"),"USD","card-expiring",Enums.TripStatus.PLANNED));
                 seedTravelHistory(trips);curateDemoData(trips,txs,alerts,cases);seedOpenAlert(alerts);seedTrackingCase(cases);return;
@@ -29,6 +30,7 @@ public class DataSeeder {
             cards.save(card("card-expiring","customer-001","**** 9012","VISA",8,2026,true,Enums.CardStatus.ACTIVE,"account-002"));
             cards.save(card("card-frozen","customer-001","**** 3456","MASTERCARD",10,2028,true,Enums.CardStatus.FROZEN,"account-frozen"));
             cards.save(card("card-backup","customer-001","**** 7788","VISA",6,2030,true,Enums.CardStatus.ACTIVE,"account-low"));
+            cards.save(card("card-hk-virtual","customer-001","**** 1122","VISA VIRTUAL HK",12,2031,true,Enums.CardStatus.ACTIVE,"account-001"));
             cards.save(card("card-201","customer-002","**** 2201","VISA",6,2030,true,Enums.CardStatus.ACTIVE,"account-201"));
             configureCardCurrencies(cards);
             trips.save(trip("trip-tokyo","customer-001","Japan","Tokyo",LocalDate.of(2026,8,10),LocalDate.of(2026,8,18),new BigDecimal("2500"),"USD","card-002",Enums.TripStatus.PLANNED));
@@ -179,8 +181,13 @@ public class DataSeeder {
         configureCard(cards,"card-expiring","USD","EUR,GBP");
         configureCard(cards,"card-frozen","USD","SGD");
         configureCard(cards,"card-backup","USD","JPY,EUR");
+                configureCard(cards,"card-hk-virtual","HKD","HKD,CNY,JPY,SGD");
         configureCard(cards,"card-201","USD","JPY,EUR");
     }
+        private void ensureVirtualTravelCard(CardRepository cards){
+                if(cards.existsById("card-hk-virtual"))return;
+                cards.save(card("card-hk-virtual","customer-001","**** 1122","VISA VIRTUAL HK",12,2031,true,Enums.CardStatus.ACTIVE,"account-001"));
+        }
     private void configureCard(CardRepository cards,String id,String mainCurrency,String supportedCurrencies){
         cards.findById(id).ifPresent(card->{
             card.setMainCurrency(mainCurrency);

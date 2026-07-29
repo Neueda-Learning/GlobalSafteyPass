@@ -68,17 +68,30 @@ final class RuleResult {
     }
 }
 @Component class CurrencySupportRule implements ReadinessRule {
-    private static final Map<String,String> CURRENCY=Map.of("Japan","JPY","France","EUR","Singapore","SGD","Canada","CAD","United States","USD","United Kingdom","GBP","China","CNY");
+    private static final Map<String,String> CURRENCY=Map.of(
+            "Japan","JPY","France","EUR","Singapore","SGD","Canada","CAD",
+            "United States","USD","United Kingdom","GBP","China","CNY","Hong Kong","HKD");
     private final CardCapabilityService capabilities;
     CurrencySupportRule(CardCapabilityService capabilities){this.capabilities=capabilities;}
     public ReadinessRuleResult evaluate(Trip t, Card c, Account a) {
+        String mainCurrency = Optional.ofNullable(c.getMainCurrency()).orElse("").trim();
+        if("USD".equalsIgnoreCase(mainCurrency)){
+            return RuleResult.ok("USD_SETTLEMENT_CARD","Selected card settles through USD.");
+        }
         String destination=CURRENCY.get(t.getDestinationCountry());
         if(destination==null)return t.isCashExchangePlanned()?RuleResult.ok("CASH_EXCHANGE_PLANNED","Cash exchange on arrival is recorded.")
                 :RuleResult.fail("CURRENCY_UNKNOWN",Severity.WARNING,-5,"Destination currency could not be verified.","Switch cards in Trip Details or plan to exchange cash on arrival.");
         boolean supported=capabilities.supportsCurrency(c,destination);
-        return supported?RuleResult.ok("CURRENCY_SUPPORT","Preferred card supports "+destination+".")
-                :t.isCashExchangePlanned()?RuleResult.ok("CASH_EXCHANGE_PLANNED","Cash exchange on arrival is recorded for "+destination+".")
-                :RuleResult.fail("CURRENCY_NOT_SUPPORTED",Severity.WARNING,-5,"Preferred card does not list "+destination+" support.","Switch cards in Trip Details or plan to exchange cash on arrival.");
+        if(supported)return RuleResult.ok("CURRENCY_SUPPORT","Preferred card supports "+destination+".");
+        if("USD_SETTLEMENT".equalsIgnoreCase(t.getCashExchangeMethod())){
+            return RuleResult.ok("USD_SETTLEMENT_ACCEPTED","You accepted USD settlement for this trip.");
+        }
+        if("ATM_CASH".equalsIgnoreCase(t.getCashExchangeMethod())){
+            return RuleResult.ok("ATM_CASH_PLANNED","ATM cash withdrawal plan is recorded to avoid USD settlement.");
+        }
+        return RuleResult.fail("CURRENCY_NOT_SUPPORTED",Severity.WARNING,-5,
+                "This card will settle through USD for "+destination+".",
+                "Accept USD settlement, choose ATM cash withdrawal, or switch to a card that supports "+destination+".");
     }
 }
 @Component class BackupCardRule implements ReadinessRule {

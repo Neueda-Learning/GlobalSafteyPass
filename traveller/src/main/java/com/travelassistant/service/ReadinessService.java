@@ -14,6 +14,8 @@ import java.util.*;
 
 @Service
 public class ReadinessService {
+    private static final String USD_SETTLEMENT_OPTION = "USD_SETTLEMENT";
+    private static final String ATM_CASH_OPTION = "ATM_CASH";
     private final TripService tripService; private final CardRepository cards; private final AccountRepository accounts;
     private final List<ReadinessRule> rules; private final ReadinessAssessmentRepository assessments;
     private final ObjectMapper mapper; private final AuditService audit;
@@ -36,5 +38,25 @@ public class ReadinessService {
         tripService.owned(customer,tripId);
         return assessments.findByTripId(tripId).map(x->{try{return new ReadinessResponse(tripId,x.getScore(),x.getStatus(),mapper.readValue(x.getChecksJson(),new TypeReference<>(){}));}catch(Exception e){throw new IllegalStateException(e);}})
                 .orElseThrow(()->new ResourceNotFoundException("Run a readiness check first."));
+    }
+    @Transactional public void setCurrencyFallback(String customer,String tripId,String option){
+        Trip trip=tripService.owned(customer,tripId);
+        String normalized=(option==null?"":option.trim().toUpperCase(Locale.ROOT));
+        if(!USD_SETTLEMENT_OPTION.equals(normalized)&&!ATM_CASH_OPTION.equals(normalized)){
+            throw new IllegalArgumentException("Unsupported currency fallback option.");
+        }
+        Instant now=Instant.now();
+        trip.setCashExchangePlanned(true);
+        trip.setCashExchangeMethod(normalized);
+        trip.setCashExchangePlannedAt(now);
+        trip.setCashExchangeLocation(ATM_CASH_OPTION.equals(normalized)
+                ?(trip.getDestinationCity()==null||trip.getDestinationCity().isBlank()?trip.getDestinationCountry():trip.getDestinationCity()+", "+trip.getDestinationCountry())
+                :"USD settlement");
+        trip.setCashExchangeAmountUsd(null);
+        trip.setUpdatedAt(now);
+        String detail=USD_SETTLEMENT_OPTION.equals(normalized)
+                ?"Accepted USD settlement fallback"
+                :"Will use ATM cash withdrawal to avoid USD settlement";
+        audit.log(customer,"READINESS_CURRENCY_FALLBACK_SET","TRIP",tripId,detail);
     }
 }
