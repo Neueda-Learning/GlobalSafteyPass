@@ -527,9 +527,6 @@ async function load(){
         alerts:[],cards:[],transactions:[],cases:[],tripMoney:{},tripReadiness:{}
       };
       $("#trips").innerHTML='<p class="empty">No trips yet. Tap "New trip" to start planning.</p>';
-      $("#spent").textContent=money(0);
-      $("#remaining").innerHTML=money(0);
-      $("#budget").textContent=money(0);
       $("#paymentIssue").innerHTML="";
       $("#caseTracking").innerHTML="";
       $("#attentionSection").style.display="none";
@@ -575,12 +572,6 @@ async function load(){
       ${readinessBadge(t.id)}
       ${state.tripMoney[t.id]?`<small class="trip-local">Remaining ${localRemaining(state.tripMoney[t.id].dashboard,state.tripMoney[t.id].fx)}</small>`:""}
     </article>`).join(""):'<p class="empty">No upcoming journeys yet.</p>');
-    const displayCurrency=(focusTrip.budgetCurrency||dashboard.currency||"USD").toUpperCase();
-    const displayDashboard={...dashboard,currency:displayCurrency};
-    $("#spent").textContent=currencyMoney(dashboard.spent,displayCurrency);
-    const convertedRemaining=localRemaining(displayDashboard,focusFx,true);
-    $("#remaining").innerHTML=`${currencyMoney(dashboard.remaining,displayCurrency)}${convertedRemaining?`<small>${convertedRemaining}</small>`:""}`;
-    $("#budget").textContent=currencyMoney(dashboard.budget,displayCurrency);
 
     const failed=dashboard.recentTransactions.find(t=>t.status==="DECLINED"&&t.failureCode==="NETWORK_ERROR")||dashboard.recentTransactions.find(t=>t.status==="DECLINED");
     const featuredByHero=renderHomeAssistant(failed);
