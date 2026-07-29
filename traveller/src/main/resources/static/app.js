@@ -115,6 +115,15 @@ function defaultCurrencyDisplay(currencies){
   const pick=mainstream||rows[0]||null;
   return pick?currencyDisplay(pick):"";
 }
+function disableBudgetArrowAdjust(formId){
+  const form=$(formId);
+  const input=form?.querySelector('input[name="budget"]');
+  if(!input)return;
+  input.addEventListener("keydown",e=>{
+    if(e.key==="ArrowUp"||e.key==="ArrowDown")e.preventDefault();
+  });
+  input.addEventListener("wheel",e=>e.preventDefault(),{passive:false});
+}
 async function bindTripReferenceControls({countryValue="",cityValue="",currencyValue="",preferCountryMainstream=false}={}){
   await ensureTripReference();
   const countryInput=$("#countryInput"),cityInput=$("#cityInput"),currencyInput=$("#currencyInput");
@@ -420,7 +429,7 @@ async function openCreateTrip(){
       </label>
       <div class="row"><label>START DATE<input name="startDate" type="date" min="${new Date().toISOString().slice(0,10)}" value="${start}" required></label>
       <label>END DATE<input name="endDate" type="date" min="${new Date().toISOString().slice(0,10)}" value="${end}" required></label></div>
-      <div class="row"><label>BUDGET<input name="budget" type="number" min="0.01" step="0.01" value="2500" required></label>
+      <div class="row"><label>BUDGET<input class="budget-keyboard-only" name="budget" type="number" min="0.01" step="0.01" value="2500" required></label>
       <label>CURRENCY
         <div class="trip-picker-wrap">
           <input class="trip-picker" id="currencyInput" name="budgetCurrency" placeholder="Search or choose currency (e.g. HKD)" autocomplete="off" required>
@@ -431,6 +440,7 @@ async function openCreateTrip(){
       <button type="submit">Create trip</button>
     </form>`);
   await bindTripReferenceControls({preferCountryMainstream:true});
+  disableBudgetArrowAdjust("#tripForm");
   $("#tripForm").onsubmit=createTrip;
 }
 async function createTrip(event){
@@ -468,7 +478,7 @@ window.openTripEditor=id=>{
       </label>
       <div class="row"><label>START DATE<input name="startDate" type="date" min="${new Date().toISOString().slice(0,10)}" value="${t.startDate}" required></label>
       <label>END DATE<input name="endDate" type="date" min="${new Date().toISOString().slice(0,10)}" value="${t.endDate}" required></label></div>
-      <div class="row"><label>BUDGET<input name="budget" type="number" min="0.01" step="0.01" value="${t.budget}" required></label>
+      <div class="row"><label>BUDGET<input class="budget-keyboard-only" name="budget" type="number" min="0.01" step="0.01" value="${t.budget}" required></label>
       <label>CURRENCY
         <div class="trip-picker-wrap">
           <input class="trip-picker" id="currencyInput" name="budgetCurrency" placeholder="Search or choose currency" autocomplete="off" value="${escapeHtml(t.budgetCurrency)}" required>
@@ -479,6 +489,7 @@ window.openTripEditor=id=>{
       <button type="submit">Save trip changes</button>
     </form>`);
   bindTripReferenceControls({countryValue:t.destinationCountry,cityValue:t.destinationCity||"",currencyValue:t.budgetCurrency}).then(()=>{
+    disableBudgetArrowAdjust("#editTripForm");
     $("#editTripForm").onsubmit=e=>updateTrip(e,id);
   });
 };
