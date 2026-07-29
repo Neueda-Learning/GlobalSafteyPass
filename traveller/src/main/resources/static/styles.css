@@ -26,6 +26,8 @@
 .trip-picker-empty{padding:10px 11px;color:var(--muted);font-size:12px}
 .trip-form>button{height:54px;border-radius:16px;box-shadow:0 12px 20px #0d6b4b28}
 .trip-form small{font-size:11px;line-height:1.35}
+.submit-overlay{position:fixed;inset:0;background:#17221d24;backdrop-filter:blur(2px);display:grid;place-items:center;z-index:80}
+.submit-overlay-spinner{width:56px;height:56px;border:5px solid #ffffff66;border-top-color:var(--green);border-radius:50%;background:#fbfaf6;box-shadow:0 12px 28px #17221d20;animation:spin 1s linear infinite}
 input.budget-keyboard-only::-webkit-outer-spin-button,
 input.budget-keyboard-only::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 input.budget-keyboard-only{-moz-appearance:textfield;appearance:textfield}

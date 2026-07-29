@@ -124,6 +124,22 @@ function disableBudgetArrowAdjust(formId){
   });
   input.addEventListener("wheel",e=>e.preventDefault(),{passive:false});
 }
+function setCreateTripOverlay(visible){
+  let overlay=$("#createTripOverlay");
+  if(visible&&!overlay){
+    overlay=document.createElement("div");
+    overlay.id="createTripOverlay";
+    overlay.className="submit-overlay";
+    overlay.innerHTML='<div class="submit-overlay-spinner" aria-hidden="true"></div>';
+    document.body.appendChild(overlay);
+  }
+  if(!overlay)return;
+  if(visible)overlay.hidden=false;
+  else overlay.remove();
+}
+function nextFrame(){
+  return new Promise(resolve=>requestAnimationFrame(()=>resolve()));
+}
 async function bindTripReferenceControls({countryValue="",cityValue="",currencyValue="",preferCountryMainstream=false}={}){
   await ensureTripReference();
   const countryInput=$("#countryInput"),cityInput=$("#cityInput"),currencyInput=$("#currencyInput");
@@ -452,12 +468,16 @@ async function createTrip(event){
   payload.budgetCurrency=parseCurrencyCode(payload.budgetCurrency);
   if(payload.endDate<payload.startDate){toast("End date must be on or after the start date");return}
   const button=event.currentTarget.querySelector("button");button.disabled=true;button.textContent="Creating…";
+  setCreateTripOverlay(true);
   try{
+    await nextFrame();
     const trip=await api("/api/travel/trips",{method:"POST",body:JSON.stringify(payload)});
     await load();
+    setCreateTripOverlay(false);
     openSheet(`<div class="success-panel"><b>Trip created</b><p>${trip.destinationCity||trip.destinationCountry}, ${trip.destinationCountry} has been added to your journeys.</p></div>
       <div class="menu-actions"><button onclick="showJourney('${trip.id}')">Open journey</button><button class="light" onclick="runCheck('${trip.id}')">Run readiness check</button></div>`);
   }catch(e){toast(e.message);button.disabled=false;button.textContent="Create trip"}
+  finally{setCreateTripOverlay(false)}
 }
 window.openTripEditor=id=>{
   const t=state.trips.find(x=>x.id===id);if(!t||t.status!=="PLANNED")return;
