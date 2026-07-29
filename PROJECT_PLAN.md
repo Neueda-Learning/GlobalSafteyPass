@@ -24,7 +24,7 @@ Build a mobile banking travel assistant that helps users:
 - **Database:** MySQL
 - **Frontend:** HTML, CSS, JavaScript
 - **Testing:** JUnit and Spring Boot Test
-- **API documentation:** Swagger
+- **API documentation:** Frankfurter API, countriesnow.space, OpenStreetMap
 
 ## Schedule
 
