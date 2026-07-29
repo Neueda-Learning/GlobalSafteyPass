@@ -38,10 +38,6 @@ function parseCurrencyCode(raw){
   return m?m[0]:value;
 }
 
-function escapeHtml(v=""){
-  return v.replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
-}
-
 function closeTripPanels(){
   ["#countryPanel","#cityPanel","#currencyPanel"].forEach(id=>$(id)?.classList.remove("show"));
 }
@@ -308,14 +304,43 @@ window.deleteTrip=async id=>{
 async function load(){
   try{
     updateGreeting();
-    const {data:trips}=await api("/api/travel/trips");
+    const tripsResponse=await api("/api/travel/trips");
+    const trips=Array.isArray(tripsResponse?.data)?tripsResponse.data:[];
     trips.sort((a,b)=>(a.status==="COMPLETED")-(b.status==="COMPLETED")||a.startDate.localeCompare(b.startDate));
+
+    if(!trips.length){
+      state={
+        trips:[],dashboard:{budget:0,spent:0,remaining:0,recentTransactions:[],currency:"USD",readinessStatus:"NOT_READY"},
+        alerts:[],cards:[],transactions:[],cases:[],tripMoney:{}
+      };
+      $("#trips").innerHTML='<p class="empty">No trips yet. Tap "New trip" to start planning.</p>';
+      $("#spent").textContent=money(0);
+      $("#remaining").innerHTML=money(0);
+      $("#budget").textContent=money(0);
+      $("#paymentIssue").innerHTML="";
+      $("#caseTracking").innerHTML="";
+      $("#attentionSection").style.display="none";
+      renderHomeAssistant(null);
+      maybeShowFraudAlert();
+      return;
+    }
+
     const focusTrip=trips.find(t=>t.status!=="COMPLETED"&&t.status!=="CANCELLED")||trips[0];
-    const [dashboard,focusFx,{data:alerts},{data:cards},{data:transactions},{data:cases}]=await Promise.all([
+    const [dashboardResp,focusFx,alertsResp,cardsResp,transactionsResp,casesResp]=await Promise.all([
       api(`/api/travel/trips/${focusTrip.id}/dashboard`),
       api(`/api/travel/trips/${focusTrip.id}/exchange-rate?_=${Date.now()}`,{headers:{"Cache-Control":"no-cache"}}),
       api("/api/travel/alerts"),api("/api/travel/cards"),api("/api/travel/transactions"),api("/api/travel/cases")
     ]);
+    const dashboard={
+      budget:0,spent:0,remaining:0,recentTransactions:[],currency:"USD",readinessStatus:"NOT_READY",
+      ...(dashboardResp||{})
+    };
+    dashboard.recentTransactions=Array.isArray(dashboard.recentTransactions)?dashboard.recentTransactions:[];
+    const alerts=Array.isArray(alertsResp?.data)?alertsResp.data:[];
+    const cards=Array.isArray(cardsResp?.data)?cardsResp.data:[];
+    const transactions=Array.isArray(transactionsResp?.data)?transactionsResp.data:[];
+    const cases=Array.isArray(casesResp?.data)?casesResp.data:[];
+
     const upcoming=trips.filter(t=>t.status!=="COMPLETED"&&t.status!=="CANCELLED");
     const tripMoney=Object.fromEntries(await Promise.all(upcoming.map(async t=>{
       if(t.id===focusTrip.id)return [t.id,{dashboard,fx:focusFx}];
@@ -326,15 +351,12 @@ async function load(){
     $("#trips").innerHTML=(upcoming.length?upcoming:trips).map(t=>`<article class="trip" role="button" tabindex="0" onclick="showJourney('${t.id}')">
       <span class="tag">${t.status}</span><span class="arrow">→</span>
       <h3>${t.destinationCity}, ${t.destinationCountry}</h3>
-      
-      <p>${t.startDate} — ${t.endDate} · ${currencyMoney(t.budget,t.budgetCurrency)}</p>
+      <p>${t.startDate} — ${t.endDate} · ${money(t.budget)}</p>
+      ${state.tripMoney[t.id]?`<small class="trip-local">Remaining ${localRemaining(state.tripMoney[t.id].dashboard,state.tripMoney[t.id].fx)}</small>`:""}
     </article>`).join("");
-    ${state.tripMoney[t.id]?`<small class="trip-local">Remaining ${localRemaining(state.tripMoney[t.id].dashboard,state.tripMoney[t.id].fx)}</small>`:""}
-    </article>`).join("");
-    $("#spent").textContent=currencyMoney(dashboard.spent,dashboard.currency);
-    $("#remaining").innerHTML=`${currencyMoney(dashboard.remaining,dashboard.currency)}<small>${localRemaining(dashboard,focusFx,true)}</small>`;
-    $("#budget").textContent=currencyMoney(dashboard.budget,dashboard.currency);
-    renderTravelToolkit();
+    $("#spent").textContent=money(dashboard.spent);
+    $("#remaining").innerHTML=`${money(dashboard.remaining)}<small>${localRemaining(dashboard,focusFx,true)}</small>`;
+    $("#budget").textContent=money(dashboard.budget);
 
     const failed=dashboard.recentTransactions.find(t=>t.status==="DECLINED"&&t.failureCode==="NETWORK_ERROR")||dashboard.recentTransactions.find(t=>t.status==="DECLINED");
     const featuredByHero=renderHomeAssistant(failed);
@@ -379,6 +401,7 @@ window.showCase=id=>{
 function renderHomeAssistant(failed){
   const next=state.trips.find(t=>t.status!=="COMPLETED"&&t.status!=="CANCELLED")||state.trips[0];
   const panel=$("#nextBestAction");
+  if(!panel)return false;
   if(!next){panel.hidden=true;return false}
   const openAlert=state.alerts.find(a=>a.status==="OPEN");
   const preferred=state.cards.find(c=>c.id===next.preferredCardId);
