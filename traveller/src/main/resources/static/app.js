@@ -109,7 +109,38 @@ function renderCurrencyOptions(currencies,filter=""){
     ? rows.map(x=>`<button type="button" class="trip-picker-option ${isCurrencySelected(x,$("#currencyInput")?.value)?"selected":""}" data-value="${escapeHtml(currencyDisplay(x))}" aria-selected="${isCurrencySelected(x,$("#currencyInput")?.value)}">${escapeHtml(currencyDisplay(x))}</button>`).join("")
     : '<div class="trip-picker-empty">No match</div>';
 }
-async function bindTripReferenceControls({countryValue="",cityValue="",currencyValue=""}={}){
+function defaultCurrencyDisplay(currencies){
+  const rows=Array.isArray(currencies)?currencies:[];
+  const mainstream=rows.find(x=>x&&x.mainstreamForCountry);
+  const pick=mainstream||rows[0]||null;
+  return pick?currencyDisplay(pick):"";
+}
+function disableBudgetArrowAdjust(formId){
+  const form=$(formId);
+  const input=form?.querySelector('input[name="budget"]');
+  if(!input)return;
+  input.addEventListener("keydown",e=>{
+    if(e.key==="ArrowUp"||e.key==="ArrowDown")e.preventDefault();
+  });
+  input.addEventListener("wheel",e=>e.preventDefault(),{passive:false});
+}
+function setCreateTripOverlay(visible){
+  let overlay=$("#createTripOverlay");
+  if(visible&&!overlay){
+    overlay=document.createElement("div");
+    overlay.id="createTripOverlay";
+    overlay.className="submit-overlay";
+    overlay.innerHTML='<div class="submit-overlay-spinner" aria-hidden="true"></div>';
+    document.body.appendChild(overlay);
+  }
+  if(!overlay)return;
+  if(visible)overlay.hidden=false;
+  else overlay.remove();
+}
+function nextFrame(){
+  return new Promise(resolve=>requestAnimationFrame(()=>resolve()));
+}
+async function bindTripReferenceControls({countryValue="",cityValue="",currencyValue="",preferCountryMainstream=false}={}){
   await ensureTripReference();
   const countryInput=$("#countryInput"),cityInput=$("#cityInput"),currencyInput=$("#currencyInput");
   const countryPanel=$("#countryPanel"),cityPanel=$("#cityPanel"),currencyPanel=$("#currencyPanel");
@@ -137,7 +168,10 @@ async function bindTripReferenceControls({countryValue="",cityValue="",currencyV
     renderCityOptions(cities,cityInput?.value||"");
     renderCurrencyOptions(currencies,currencyInput?.value||"");
     if(resetCity)cityInput.value="";
-    if(!currencyInput.value&&currencies.length)currencyInput.value=currencyDisplay(currencies[0]);
+    if(preferCountryMainstream||!currencyInput.value){
+      const nextValue=defaultCurrencyDisplay(currencies);
+      if(nextValue)currencyInput.value=nextValue;
+    }
   };
 
   countryInput.onfocus=()=>{renderCountryOptions(countryInput.value);openTripPanel("#countryPanel")};
@@ -421,7 +455,7 @@ async function openCreateTrip(){
       </label>
       <div class="row"><label>START DATE<input name="startDate" type="date" min="${new Date().toISOString().slice(0,10)}" value="${start}" required></label>
       <label>END DATE<input name="endDate" type="date" min="${new Date().toISOString().slice(0,10)}" value="${end}" required></label></div>
-      <div class="row"><label>BUDGET<input name="budget" type="number" min="0.01" step="0.01" value="2500" required></label>
+      <div class="row"><label>BUDGET<input class="budget-keyboard-only" name="budget" type="number" min="0.01" step="0.01" value="2500" required></label>
       <label>CURRENCY
         <div class="trip-picker-wrap">
           <input class="trip-picker" id="currencyInput" name="budgetCurrency" placeholder="Search or choose currency (e.g. HKD)" autocomplete="off" required>
@@ -443,12 +477,16 @@ async function createTrip(event){
   payload.budgetCurrency=parseCurrencyCode(payload.budgetCurrency);
   if(payload.endDate<payload.startDate){toast("End date must be on or after the start date");return}
   const button=event.currentTarget.querySelector("button");button.disabled=true;button.textContent="Creating…";
+  setCreateTripOverlay(true);
   try{
+    await nextFrame();
     const trip=await api("/api/travel/trips",{method:"POST",body:JSON.stringify(payload)});
     await load();
+    setCreateTripOverlay(false);
     openSheet(`<div class="success-panel"><b>Trip created</b><p>${trip.destinationCity||trip.destinationCountry}, ${trip.destinationCountry} has been added to your journeys.</p></div>
       <div class="menu-actions"><button onclick="showJourney('${trip.id}')">Open journey</button><button class="light" onclick="runCheck('${trip.id}')">Run readiness check</button></div>`);
   }catch(e){toast(e.message);button.disabled=false;button.textContent="Create trip"}
+  finally{setCreateTripOverlay(false)}
 }
 window.openTripEditor=id=>{
   const t=state.trips.find(x=>x.id===id);if(!t||t.status!=="PLANNED")return;
@@ -469,7 +507,7 @@ window.openTripEditor=id=>{
       </label>
       <div class="row"><label>START DATE<input name="startDate" type="date" min="${new Date().toISOString().slice(0,10)}" value="${t.startDate}" required></label>
       <label>END DATE<input name="endDate" type="date" min="${new Date().toISOString().slice(0,10)}" value="${t.endDate}" required></label></div>
-      <div class="row"><label>BUDGET<input name="budget" type="number" min="0.01" step="0.01" value="${t.budget}" required></label>
+      <div class="row"><label>BUDGET<input class="budget-keyboard-only" name="budget" type="number" min="0.01" step="0.01" value="${t.budget}" required></label>
       <label>CURRENCY
         <div class="trip-picker-wrap">
           <input class="trip-picker" id="currencyInput" name="budgetCurrency" placeholder="Search or choose currency" autocomplete="off" value="${escapeHtml(t.budgetCurrency)}" required>
@@ -480,6 +518,7 @@ window.openTripEditor=id=>{
       <button type="submit">Save trip changes</button>
     </form>`);
   bindTripReferenceControls({countryValue:t.destinationCountry,cityValue:t.destinationCity||"",currencyValue:t.budgetCurrency}).then(()=>{
+    disableBudgetArrowAdjust("#editTripForm");
     $("#editTripForm").onsubmit=e=>updateTrip(e,id);
   });
 };

@@ -19,12 +19,15 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
 public class ReferenceDataService {
     private static final Duration CACHE_TTL = Duration.ofHours(12);
     private static final String UA = "Mozilla/5.0 (compatible; TravelAssistant/1.0; +https://localhost)";
+    private static final Pattern CURRENCY_CODE_PATTERN = Pattern.compile("[A-Za-z]{3}");
 
     private final WebClient countriesClient = WebClient.builder()
         .baseUrl("https://countriesnow.space")
@@ -181,23 +184,37 @@ public class ReferenceDataService {
                         || c.iso2().equalsIgnoreCase(country)
                         || c.iso3().equalsIgnoreCase(country))
                 .findFirst().orElse(null);
-        String mainstream = match == null ? "" : safeUpper(match.mainstreamCurrency());
-
-        if (mainstream.isBlank()) return all;
+        List<String> mainstreamCodes = parseMainstreamCurrencies(match == null ? "" : match.mainstreamCurrency());
+        if (mainstreamCodes.isEmpty()) return all;
+        Map<String, Integer> priority = new LinkedHashMap<>();
+        for (int i = 0; i < mainstreamCodes.size(); i++) {
+            priority.putIfAbsent(mainstreamCodes.get(i), i);
+        }
 
         Map<String, CurrencyOption> byCode = new LinkedHashMap<>();
         for (CurrencyOption option : all) {
-            boolean top = option.code().equalsIgnoreCase(mainstream);
+            boolean top = priority.containsKey(option.code().toUpperCase(Locale.ROOT));
             byCode.put(option.code(), new CurrencyOption(option.code(), option.name(), top));
         }
 
         List<CurrencyOption> ordered = new ArrayList<>();
-        CurrencyOption top = byCode.remove(mainstream);
-        if (top != null) {
-            ordered.add(top);
+        for (String code : mainstreamCodes) {
+            CurrencyOption top = byCode.remove(code);
+            if (top != null) ordered.add(top);
         }
         ordered.addAll(byCode.values());
         return ordered;
+    }
+
+    private static List<String> parseMainstreamCurrencies(String mainstreamRaw) {
+        if (mainstreamRaw == null || mainstreamRaw.isBlank()) return List.of();
+        Matcher matcher = CURRENCY_CODE_PATTERN.matcher(mainstreamRaw.toUpperCase(Locale.ROOT));
+        List<String> codes = new ArrayList<>();
+        while (matcher.find()) {
+            String code = matcher.group();
+            if (!codes.contains(code)) codes.add(code);
+        }
+        return codes;
     }
 
     private List<CurrencyOption> supportedCurrencies() {
