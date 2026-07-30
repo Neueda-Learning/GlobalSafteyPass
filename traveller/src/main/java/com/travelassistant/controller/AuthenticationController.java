@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.*;
 public class AuthenticationController {
     private final AuthenticationService service;
     public AuthenticationController(AuthenticationService service){this.service=service;}
-    @PostMapping("/start") public StartResponse start(@Valid @RequestBody StartRequest request){return service.start(request.customerId());}
+    @PostMapping("/start") public StartResponse start(@Valid @RequestBody StartRequest request){return service.start(request.displayName());}
     @PostMapping("/sms") public SmsResponse sms(@RequestParam String challengeId){return service.sendSms(challengeId);}
     @PostMapping("/verify") public VerifyResponse verify(@Valid @RequestBody VerifyRequest request){return service.verify(request);}
     @GetMapping("/session") public SessionResponse session(@RequestHeader("Authorization")String authorization){

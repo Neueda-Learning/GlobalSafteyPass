@@ -7,7 +7,7 @@ import java.util.List;
 public final class AuthDtos {
     private AuthDtos(){}
     public enum Method { TRUSTED_DEVICE, APP_PIN, SMS_OTP }
-    public record StartRequest(@NotBlank String customerId){}
+    public record StartRequest(@NotBlank String displayName){}
     public record StartResponse(String challengeId,Method preferredMethod,List<Method> availableMethods,
             String maskedPhone,Instant expiresAt,String message){}
     public record VerifyRequest(@NotBlank String challengeId,Method method,String credential){}
