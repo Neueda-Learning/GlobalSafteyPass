@@ -5,15 +5,25 @@
   <title>Voyage · Travel Assistant</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/redesign.css">
 </head>
 <body>
+<!--
+THESIS: Voyage behaves like a living travel credential: one current journey, its money, readiness, and protection held together.
+OWN-WORLD: Modern travel document × private bank; warm stock, ink green, route notation, stamped states, restrained brass.
+STORY: Arrive at the current journey, understand readiness and money, act on the one urgent item, then move into trips, wallet, or safety.
+FIRST VIEWPORT: A destination-led journey folio with route, dates, readiness state, budget position, and the next safe action.
+FORM: Mobile-only operating surface with document rhythm, ruled divisions, tabbed controls, and stamped circular state marks.
+SEED: User-pinned direction approved in conversation; the concept roll was superseded by the pinned brief.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+-->
 <a class="skip-link" href="#appMain">Skip to main content</a>
 <section id="authGate" class="auth-gate" role="dialog" aria-modal="true" aria-labelledby="authTitle">
   <div class="auth-card">
-    <div class="auth-brand">V</div><span class="eyebrow">SECURE MOBILE BANKING</span>
+    <div class="auth-lockup"><div class="auth-brand">V</div><strong>Voyage</strong></div>
     <div id="authBody">
       <h2 id="authTitle">Welcome back</h2><p>Verify your identity to open Travel Assistant.</p>
       <label class="auth-label" for="authCustomer">YOUR NAME</label>
@@ -26,7 +36,7 @@
 <section id="fraudPopup" class="fraud-popup hidden" role="dialog" aria-modal="true" aria-live="assertive"><div id="fraudPopupBody"></div></section>
 <main id="appMain" class="phone">
   <div id="homePage" class="app-page">
-  <header><div><span class="eyebrow">YOUR TRAVEL ASSISTANT</span><h1 id="welcomeTitle">Evening, Jessie.</h1></div>
+  <header><div><p class="context-line">Travel Assistant</p><h1 id="welcomeTitle">Welcome back.</h1></div>
     <div class="header-shortcuts" aria-label="Travel shortcuts">
       <button id="headerAnalytics" class="header-shortcut" type="button" aria-label="Open travel map">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg>
@@ -36,19 +46,17 @@
       </button>
     </div>
   </header>
+  <section id="currentJourney" class="journey-folio" aria-live="polite">
+    <div class="folio-empty"><h2>Your next journey starts here.</h2><p>Add a trip to prepare your cards, currency and travel budget.</p></div>
+  </section>
   <section id="nextBestAction" class="hero" hidden>
     <div class="hero-top"><div><span class="label">YOUR NEXT BEST ACTION</span><strong id="assistantAction">Preparing your travel advice…</strong></div><div id="ring" class="ring"><span id="score">—</span></div></div>
     <p id="readinessText">We’re reviewing your cards, payments and travel plan.</p>
     <button id="checkBtn" class="primary"><span id="assistantButton">Review recommendation</span><span>→</span></button>
   </section>
   <section id="readinessTodoStack" class="readiness-todo-stack" hidden></section>
-  <section class="stats">
-    <div><span>TRIP BUDGET</span><strong id="budget">$2,500</strong></div><i></i>
-    <div><span>USED</span><strong id="spent">$—</strong></div><i></i>
-    <div><span>LEFT TO SPEND</span><strong id="remaining">$—</strong></div>
-  </section>
   <section id="readinessIssueStack" class="readiness-issue-stack" hidden></section>
-  <section class="section-head journey-heading"><h2>Upcoming journeys</h2><div class="section-actions">
+  <section class="section-head journey-heading"><h2>Other journeys</h2><div class="section-actions">
     <button id="createTrip" class="icon-action" aria-label="Create a new trip" title="New trip"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
     <button id="refresh" class="icon-action" aria-label="Refresh journeys" title="Refresh"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6.2 8.5A7 7 0 0 1 18 7M17.8 15.5A7 7 0 0 1 6 17"/></svg></button>
   </div></section>
@@ -61,21 +69,21 @@
   <section id="contentPage" class="app-page hidden"></section>
   <section id="sheet" class="sheet hidden"><button id="close" type="button" aria-label="Close panel">×</button><div id="sheetBody"></div></section>
   <nav aria-label="Travel Assistant">
-    <button class="active" data-page="home" aria-label="Overview" aria-current="page">
+    <button class="active" data-page="home" aria-label="Today" aria-current="page">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5M5.5 10v10h13V10M9.5 20v-6h5v6"/></svg>
-      <span>Overview</span>
+      <span>Today</span>
     </button>
-    <button data-page="trips" aria-label="My trips">
+    <button data-page="trips" aria-label="Trips">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7V5.5A1.5 1.5 0 0 1 9.5 4h5A1.5 1.5 0 0 1 16 5.5V7M4 8.5h16v11H4zM4 12h16M9 10v4M15 10v4"/></svg>
-      <span>My trips</span>
+      <span>Trips</span>
     </button>
-    <button data-page="transactions" aria-label="Transactions">
+    <button data-page="transactions" aria-label="Wallet and payments">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16M4 12h16M4 19h16M7 3v4M17 10v4M10 17v4"/></svg>
-      <span>Transactions</span>
+      <span>Wallet</span>
     </button>
-    <button data-page="profile" aria-label="Profile">
+    <button data-page="profile" aria-label="Cards and safety">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4.5 21a7.5 7.5 0 0 1 15 0"/></svg>
-      <span>Profile</span>
+      <span>Safety</span>
     </button>
   </nav>
 </main>

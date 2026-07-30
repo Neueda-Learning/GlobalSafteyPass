@@ -1,0 +1,170 @@
+/*
+THESIS: Voyage behaves like a living travel credential: one current journey, its money, readiness, and protection held together.
+OWN-WORLD: Modern travel document × private bank; warm stock, ink green, route notation, stamped states, restrained brass.
+STORY: Arrive at the current journey, understand readiness and money, act on the one urgent item, then move into trips, wallet, or safety.
+FIRST VIEWPORT: A destination-led journey folio with route, dates, readiness state, budget position, and the next safe action.
+FORM: Mobile-only operating surface; document rhythm, ruled divisions, tabbed controls, and stamped circular state marks.
+SEED: User-pinned direction approved in conversation; the concept roll was superseded by the pinned brief.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+*/
+
+:root{
+  --voyage-ink:#17352c;
+  --voyage-ink-2:#295045;
+  --voyage-paper:#f7f3e8;
+  --voyage-sheet:#fffdf7;
+  --voyage-rule:#cfd8ce;
+  --voyage-mist:#e7eee8;
+  --voyage-moss:#0b684d;
+  --voyage-safety:#ddeb83;
+  --voyage-brass:#a77b35;
+  --voyage-alert:#a7442d;
+  --voyage-radius:14px;
+}
+body{background:#d8ded8;background-image:none}
+.phone{background:var(--voyage-paper);border-color:#bfc9c0}
+.app-page{padding:25px 22px 34px}
+header{margin:0 0 23px;align-items:center}
+.context-line{font-size:12px;letter-spacing:.01em;color:var(--voyage-moss)}
+h1,.page-title h1{font-size:40px;line-height:.94;color:var(--voyage-ink)}
+.phone :where(h1,h2,h3,.folio-route strong,.hero strong,.trip h3,.auth-card h2){
+  font-family:"DM Sans",sans-serif!important;
+  letter-spacing:-.025em;
+}
+.header-shortcuts{align-items:center}
+.header-shortcut{width:42px;height:42px;padding:0;background:transparent;border-color:#bdcabf;color:var(--voyage-ink);place-items:center;line-height:0}
+.header-shortcut svg{display:block;width:24px;height:24px;margin:auto}
+.header-shortcut:hover{background:var(--voyage-mist)}
+
+.journey-folio{
+  position:relative;
+  min-height:252px;
+  margin:0 -22px;
+  padding:25px 24px 22px;
+  color:#f8f6ed;
+  background:var(--voyage-ink);
+  overflow:hidden;
+}
+.journey-folio[role="button"]{cursor:pointer}
+.journey-folio[role="button"]:focus-visible{outline:3px solid var(--voyage-safety);outline-offset:-5px}
+.journey-folio::after{
+  content:"";
+  position:absolute;
+  right:-54px;top:-45px;
+  width:170px;height:170px;
+  border:1px solid rgba(247,243,232,.16);
+  border-radius:50%;
+  box-shadow:0 0 0 22px rgba(247,243,232,.04),0 0 0 44px rgba(247,243,232,.025);
+}
+.folio-meta{display:flex;align-items:center;justify-content:space-between;position:relative;z-index:1}
+.folio-meta span{font-size:11px;font-weight:700;color:#c9ded4}
+.folio-status{padding:5px 8px;border:1px solid rgba(167,123,53,.8);border-radius:999px;color:#f0d49b!important}
+.folio-route{display:flex;align-items:flex-end;gap:11px;margin-top:27px;position:relative;z-index:1}
+.folio-route strong{font:700 38px/.92 "DM Sans",sans-serif;letter-spacing:-.03em;max-width:285px;text-wrap:balance}
+.folio-route i{width:34px;height:1px;background:#88ac9d;margin-bottom:7px;position:relative}
+.folio-route i::after{content:"";position:absolute;right:0;top:-3px;width:7px;height:7px;border:1px solid #b9d4c7;border-radius:50%;background:var(--voyage-ink)}
+.folio-dates{margin:10px 0 0;color:#bdd2c8;font-size:13px}
+.folio-bottom{display:grid;grid-template-columns:1fr auto;gap:16px;align-items:end;margin-top:26px;padding-top:16px;border-top:1px solid rgba(247,243,232,.18);position:relative;z-index:1}
+.folio-budget small,.folio-readiness small{display:block;color:#a9c2b6;font-size:10px;margin-bottom:4px}
+.folio-budget b{font-size:17px;font-variant-numeric:tabular-nums}
+.folio-readiness{text-align:right}
+.folio-readiness b{display:block;color:var(--voyage-safety);font-size:13px}
+.folio-empty{display:grid;align-content:center;min-height:210px}
+.folio-empty h2{font:700 31px/1 "DM Sans",sans-serif;margin:0 0 10px}
+.folio-empty p{max-width:30ch;color:#c9d8d1;line-height:1.5}
+.folio-empty button{justify-self:start;border:0;background:var(--voyage-safety);color:var(--voyage-ink);padding:12px 15px;border-radius:10px;font-weight:800}
+
+.hero{margin:18px 0 0;border-radius:var(--voyage-radius);background:var(--voyage-sheet);color:var(--voyage-ink);border:1px solid #cbd6cc;box-shadow:none;padding:18px}
+.hero .label{color:var(--voyage-moss);font-size:11px;font-weight:800}
+.hero strong{font-size:24px;color:var(--voyage-ink)}
+.hero p{min-height:0;color:var(--voyage-ink-2);font-size:13px}
+.hero .ring{width:38px;height:38px;border:1px solid #b9cbbf;border-radius:50%;color:var(--voyage-moss);background:var(--voyage-mist)}
+.hero .primary{background:var(--voyage-ink);color:#fff;border-radius:10px}
+.stats{margin:0 -22px 28px;padding:18px 22px;border-top:0;background:#eee9dd}
+.stats span{color:#5e6e66;font-size:10px}
+.stats strong{color:var(--voyage-ink)}
+.stats i{background:#c9cfc6}
+.section-head{margin:32px 0 13px}
+.journey-heading h2,.tracking-heading h2,.profile-section-head h2,.section-head h2{font-size:27px}
+.trips{gap:10px;margin-right:-22px;padding-right:22px}
+.trip{min-width:288px;background:var(--voyage-sheet)!important;border-radius:var(--voyage-radius);border:1px solid var(--voyage-rule);padding:17px}
+.trip{display:block;color:var(--voyage-ink);text-align:left;font:inherit}
+.trip .tag{color:var(--voyage-moss);letter-spacing:.08em}
+.trip h3{font-size:23px;margin:14px 34px 5px 0}
+.trip .arrow{border-radius:50%;background:var(--voyage-mist);color:var(--voyage-moss)}
+.trip-readiness-badge{bottom:auto;top:14px;right:48px}
+.readiness-todo-card,.readiness-issue-card{border-radius:var(--voyage-radius)}
+.readiness-issue-card{background:#f5e9e3}
+.case-card,.menu-card,.check,.transaction-row,.card-controls{border-radius:var(--voyage-radius)}
+
+nav{height:80px;padding:8px 6px 11px;background:var(--voyage-sheet);border-color:#cbd3cb}
+nav button{height:58px;border-radius:10px;color:#65756d}
+nav button.active{background:var(--voyage-ink);color:#fff}
+nav button span{font-size:10px}
+nav button svg{width:22px;height:22px}
+.sheet{background:var(--voyage-paper)}
+.sheet>button{border-radius:50%}
+.page-title .eyebrow,#sheetBody>.eyebrow{display:none}
+.page-title h1{margin-top:5px}
+.bank-primary{background:var(--voyage-ink)}
+.bank-secondary{border-color:#bdc9bf;color:var(--voyage-ink)}
+.inline-link,.back{color:var(--voyage-moss)}
+#contentPage small{font-size:11px}
+#contentPage button,.sheet button{min-height:44px}
+.physical-card{border-radius:16px}
+.spending-advice{border-radius:var(--voyage-radius)}
+
+/* Travel story typography: one compact, coordinated mobile scale. */
+.travel-metrics{gap:10px}
+.travel-metrics div{
+  min-height:104px;
+  padding:18px 10px;
+  border-radius:14px;
+  display:grid;
+  align-content:center;
+  gap:7px;
+}
+.travel-metrics strong{
+  font:700 28px/1 "DM Sans",sans-serif;
+  letter-spacing:-.03em;
+}
+.travel-metrics small{
+  margin:0;
+  font:600 12px/1.25 "DM Sans",sans-serif;
+  letter-spacing:.04em;
+}
+.continent-grid{gap:10px}
+.continent-card{
+  min-height:94px;
+  padding:16px 14px;
+  border-radius:14px;
+}
+.continent-card summary{gap:11px;min-height:60px}
+.continent-card summary>i{
+  width:34px;
+  height:34px;
+  min-width:34px;
+  font-size:15px;
+}
+.continent-card summary b{
+  font:700 15px/1.2 "DM Sans",sans-serif;
+  letter-spacing:-.01em;
+}
+.continent-card summary small{
+  margin-top:4px;
+  font:500 12px/1.3 "DM Sans",sans-serif;
+}
+.continent-card summary em{
+  font-size:15px;
+  line-height:1;
+}
+
+.auth-gate{background:rgba(14,36,29,.82);backdrop-filter:none}
+.auth-card{background:var(--voyage-paper);border-radius:20px}
+.auth-brand{background:var(--voyage-ink);color:var(--voyage-paper)}
+
+@media(max-width:359px){
+  .journey-folio{margin-left:-16px;margin-right:-16px;padding-left:18px;padding-right:18px}
+  .stats{margin-left:-16px;margin-right:-16px;padding-left:18px;padding-right:18px}
+  .folio-route strong{font-size:33px}
+}

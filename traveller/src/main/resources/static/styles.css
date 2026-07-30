@@ -233,3 +233,114 @@ button:not(:disabled):active{transform:translateY(1px) scale(.98)}
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 }
+
+/* Impeccable polish: calm editorial banking, clearer hierarchy, fewer containers. */
+:root{
+  --ink:#193028;
+  --muted:#62716a;
+  --cream:#f3f0e7;
+  --paper:#fbfaf5;
+  --green:#0a6749;
+  --green-deep:#074d38;
+  --lime:#d8ee78;
+  --line:#d9ded6;
+  --shadow:0 18px 48px rgba(25,48,40,.12);
+}
+body{
+  background:#dbe1da;
+  background-image:radial-gradient(circle at 50% 0,#f5f2e9 0,transparent 58%);
+  color:var(--ink);
+}
+.phone{
+  background:var(--paper);
+  border:1px solid rgba(25,48,40,.08);
+  box-shadow:var(--shadow);
+}
+h1,.page-title h1,.section-head h2,.journey-heading h2,.tracking-heading h2,
+.profile-section-head h2,.trip h3,.auth-card h2,.hero strong{
+  font-family:"Newsreader",Georgia,serif;
+  letter-spacing:-.025em;
+}
+header{align-items:center;margin-bottom:28px}
+.context-line{
+  margin:0 0 5px;
+  color:var(--green);
+  font-size:13px;
+  font-weight:700;
+}
+h1,.page-title h1{font-size:39px;line-height:.98;margin:0}
+.header-shortcuts{gap:10px}
+.header-shortcut{
+  width:46px;height:46px;
+  border:1px solid #c8d7ce;
+  border-radius:50%;
+  background:#eef3ef;
+  color:var(--green);
+  box-shadow:none;
+}
+.header-shortcut:hover{background:#e1ebe5;transform:translateY(-2px)}
+.hero{
+  border-radius:16px;
+  background:var(--green-deep);
+  box-shadow:0 14px 30px rgba(7,77,56,.18);
+}
+.hero p{color:#d5e8df}.hero .label{color:#b8ddcb}
+.primary{border-radius:12px;background:var(--lime)}
+.stats{
+  border:0;
+  border-top:1px solid var(--line);
+  border-bottom:1px solid var(--line);
+  border-radius:0;
+  background:transparent;
+  padding:18px 2px;
+}
+.stats span{font-size:11px;letter-spacing:.03em;text-transform:none}
+.stats strong{font-size:16px}
+.section-head{margin-top:30px}
+.journey-heading h2,.tracking-heading h2,.profile-section-head h2,.section-head h2{
+  font-size:28px;
+  line-height:1;
+}
+.icon-action{
+  width:40px;height:40px;min-width:40px;
+  border:1px solid #ccd9d1!important;
+  border-radius:50%!important;
+  background:transparent!important;
+}
+.trip{
+  min-width:286px;
+  border-radius:14px;
+  padding:19px;
+  border:1px solid rgba(25,48,40,.08);
+  box-shadow:none;
+}
+.trip:hover{transform:translateY(-2px);box-shadow:0 10px 22px rgba(25,48,40,.1)}
+.trip h3{font-size:22px}
+.trip .arrow{background:rgba(255,255,255,.72)}
+.support,.check,.menu-card,.case-card,.fraud-alert-card,.travel-story-card,
+.trip-recap,.security-clear,.test-result,.best-next,.recovery-payment{
+  border-radius:14px;
+  box-shadow:none;
+}
+.actions button,.atm-result{border-radius:12px}
+nav{background:rgba(251,250,245,.97);border-color:var(--line)}
+nav button{border-radius:12px}
+nav button.active{background:#e5ede7;color:var(--green-deep)}
+.auth-gate{
+  background:rgba(17,38,31,.72);
+  backdrop-filter:blur(10px);
+}
+.auth-card{
+  border-radius:24px;
+  border:1px solid rgba(255,255,255,.4);
+  box-shadow:0 28px 80px rgba(11,32,25,.3);
+}
+.auth-lockup{display:flex;align-items:center;gap:11px;margin-bottom:32px}
+.auth-lockup strong{font:700 24px/1 "Newsreader",Georgia,serif;color:var(--ink)}
+.auth-brand{margin:0;width:42px;height:42px;border-radius:50%;font-family:"Newsreader",Georgia,serif}
+.auth-card h2{font-size:36px;line-height:1;margin-bottom:10px}
+.auth-card>p,.auth-card #authBody>p{font-size:14px;line-height:1.55;color:var(--muted)}
+.auth-label{font-size:11px;letter-spacing:.04em}
+.auth-customer{border-radius:10px}
+.bank-primary{border-radius:10px;background:var(--green-deep)}
+button:disabled{cursor:not-allowed;filter:saturate(.55);opacity:.62}

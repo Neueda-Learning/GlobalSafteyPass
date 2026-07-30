@@ -1,6 +1,7 @@
 package com.travelassistant.security;
 
 import com.travelassistant.exception.UnauthorizedException;
+import com.travelassistant.repository.CustomerRepository;
 import org.springframework.stereotype.Service;
 import java.security.SecureRandom;
 import java.time.*;
@@ -15,9 +16,14 @@ public class AuthenticationService {
     private final Map<String,Challenge> challenges=new ConcurrentHashMap<>();
     private final Map<String,Session> sessions=new ConcurrentHashMap<>();
     private final Map<String,StepUpGrant> stepUpGrants=new ConcurrentHashMap<>();
+    private final CustomerRepository customers;
 
-    public StartResponse start(String customerId){
-        if(!Set.of("customer-001","customer-002").contains(customerId))throw new UnauthorizedException("We could not verify this banking customer.");
+    public AuthenticationService(CustomerRepository customers){this.customers=customers;}
+
+    public StartResponse start(String displayName){
+        String normalizedName=displayName==null?"":displayName.trim().replaceAll("\\s+"," ");
+        String customerId=customers.findByDisplayNameIgnoreCase(normalizedName).map(c->c.getId())
+                .orElseThrow(()->new UnauthorizedException("We could not find a banking profile for that name."));
         String id=UUID.randomUUID().toString();Instant expires=Instant.now().plus(CHALLENGE_TTL);
         challenges.put(id,new Challenge(customerId,expires,0,false));
         return new StartResponse(id,Method.TRUSTED_DEVICE,List.of(Method.TRUSTED_DEVICE,Method.APP_PIN,Method.SMS_OTP),
