@@ -212,13 +212,13 @@
     }
     .team-person h3 {
       color: var(--green);
-      font-size: 1.16rem;
+      font-size: 1.28rem;
       line-height: 1.2;
       margin: 12px 0 5px;
     }
     .team-person p {
       color: var(--muted);
-      font-size: 0.76rem;
+      font-size: 0.86rem;
       font-weight: 700;
       line-height: 1.28;
       margin: 0;
@@ -301,15 +301,17 @@
     .goal-list {
       margin-top: 18px;
       display: grid;
-      gap: 12px;
+      grid-template-rows: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      height: 410px;
     }
     .goal-item {
       display: flex;
       gap: 14px;
-      align-items: flex-start;
+      align-items: center;
       background: white;
       border-radius: 16px;
-      padding: 16px 18px;
+      padding: 20px 24px;
       border: 1px solid #e4ebe6;
     }
     .goal-item span {
