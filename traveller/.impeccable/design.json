@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-30T09:14:00+08:00",
+  "title": "Design System: Voyage",
+  "extensions": {
+    "colorMeta": {
+      "passport-ink": {"role": "primary", "displayName": "Passport Ink", "canonical": "#17352c", "tonalRamp": ["#0b1c17", "#17352c", "#295045", "#477166", "#6c9388", "#9bb5ad", "#cddbd6", "#f2f6f4"]},
+      "journey-paper": {"role": "neutral", "displayName": "Journey Paper", "canonical": "#f7f3e8", "tonalRamp": ["#24221e", "#4b473f", "#756f62", "#9f9787", "#c5bdad", "#dfd8ca", "#eee8dc", "#f7f3e8"]},
+      "action-moss": {"role": "primary", "displayName": "Action Moss", "canonical": "#0b684d", "tonalRamp": ["#062219", "#0a4433", "#0b684d", "#33876e", "#62a58e", "#96c3b3", "#c7dfd7", "#eef7f4"]}
+    },
+    "typographyMeta": {
+      "display": {"displayName": "Destination Display", "purpose": "Destinations and root-screen headings."},
+      "body": {"displayName": "Banking Body", "purpose": "Financial details, guidance, and controls."}
+    },
+    "shadows": [
+      {"name": "preview-shell", "value": "0 18px 48px rgba(25,48,40,.12)", "purpose": "Desktop phone preview only."}
+    ],
+    "motion": [
+      {"name": "state-change", "value": "180ms ease", "purpose": "Focus, active, and control state transitions."}
+    ],
+    "breakpoints": [
+      {"name": "narrow-phone", "value": "359px"},
+      {"name": "edge-to-edge-phone", "value": "437px"}
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The confident default action.",
+      "html": "<button class=\"ds-primary\">Review readiness</button>",
+      "css": ".ds-primary{min-height:44px;border:0;border-radius:10px;padding:14px 16px;background:#17352c;color:#fffdf7;font:700 14px DM Sans,sans-serif}.ds-primary:hover{background:#295045}.ds-primary:focus-visible{outline:3px solid #ddeb83;outline-offset:3px}"
+    },
+    {
+      "name": "Journey Folio",
+      "kind": "custom",
+      "refersTo": "journey-folio",
+      "description": "Destination-led current journey credential.",
+      "html": "<section class=\"ds-folio\"><small>CURRENT JOURNEY</small><h2>Tokyo</h2><p>12—19 AUG · JAPAN</p><hr><b>Ready to travel</b></section>",
+      "css": ".ds-folio{background:#17352c;color:#f7f3e8;padding:25px 24px 22px;font-family:DM Sans,sans-serif}.ds-folio h2{margin:22px 0 8px;font:700 38px/.92 DM Sans,sans-serif}.ds-folio small,.ds-folio p{color:#bdd2c8}.ds-folio hr{border:0;border-top:1px solid rgba(247,243,232,.18)}.ds-folio b{color:#ddeb83}"
+    },
+    {
+      "name": "Bottom Navigation",
+      "kind": "nav",
+      "refersTo": "navigation",
+      "description": "Four mobile operating areas.",
+      "html": "<nav class=\"ds-nav\"><button class=\"active\">Today</button><button>Trips</button><button>Wallet</button><button>Safety</button></nav>",
+      "css": ".ds-nav{display:flex;gap:5px;background:#fffdf7;padding:8px 6px}.ds-nav button{min-height:44px;flex:1;border:0;border-radius:10px;background:transparent;color:#65756d;font:700 10px DM Sans,sans-serif}.ds-nav button.active{background:#17352c;color:#fff}.ds-nav button:focus-visible{outline:3px solid #ddeb83}"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Travel and authentication field.",
+      "html": "<input class=\"ds-input\" value=\"Jessie Han\" aria-label=\"Your name\">",
+      "css": ".ds-input{width:100%;min-height:44px;border:1px solid #cfd8ce;border-radius:10px;background:#fffdf7;color:#17352c;padding:12px 14px;font:600 14px DM Sans,sans-serif}.ds-input:focus{outline:3px solid #ddeb83;border-color:#0b684d}"
+    },
+    {
+      "name": "Status Stamp",
+      "kind": "chip",
+      "refersTo": "status",
+      "description": "Compact semantic journey state.",
+      "html": "<span class=\"ds-stamp\">READY TO TRAVEL</span>",
+      "css": ".ds-stamp{display:inline-block;border:1px solid #a77b35;border-radius:999px;padding:5px 8px;color:#a77b35;font:700 11px DM Sans,sans-serif;letter-spacing:.02em}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Living Travel Credential",
+    "overview": "Voyage combines the material confidence of a modern travel document with the restraint of a private bank. The current journey is the organizing object.",
+    "keyCharacteristics": ["Destination-led hierarchy", "Warm paper and deep ink surfaces", "Ruled divisions", "Stamped states", "Clear actions"],
+    "rules": [
+      {"name": "Rare Accent Rule", "body": "Lime, brass, and alert red communicate state; they never become general decoration.", "section": "colors"},
+      {"name": "Flat Credential Rule", "body": "Inside the app, prefer ink, paper, and rules over floating cards and ambient shadows.", "section": "elevation"}
+    ],
+    "dos": ["Do organize financial information around the current journey.", "Do use ruled divisions to group related information."],
+    "donts": ["Don't rebuild the page as a generic metric dashboard.", "Don't nest cards or apply shadows to every surface."]
+  }
+}

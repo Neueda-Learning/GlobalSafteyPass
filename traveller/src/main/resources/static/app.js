@@ -8,7 +8,7 @@ const formatMoney=(n,currency="USD")=>{
 const money=(n,currency)=>(formatMoney(n,currency||state.dashboard?.currency||"USD"));
 const currencyMoney=(n,currency="USD")=>formatMoney(n,currency);
 const dayCount=date=>Math.ceil((new Date(`${date}T12:00:00`)-new Date())/86400000);
-let state={trips:[],dashboard:null,alerts:[],cards:[],transactions:[],cases:[],tripMoney:{}};
+let state={profile:null,trips:[],dashboard:null,alerts:[],cards:[],transactions:[],cases:[],tripMoney:{}};
 let activeRecovery=null;
 let activeAtmMap=null;
 let activeAnalyticsMap=null;
@@ -150,7 +150,15 @@ async function bindTripReferenceControls({countryValue="",cityValue="",currencyV
   renderCountryOptions();
   const initialCurrencies=await loadCurrencies("");
   renderCurrencyOptions(initialCurrencies,"");
-  currencyInput.value=currencyValue||defaultCurrencyDisplay(initialCurrencies);
+  currencyInput.value=currencyValue|| (initialCurrencies.length?currencyDisplay(initialCurrencies[0]):"");
+  if(countryValue){
+    const selected=resolveCountrySelection(countryValue);
+    const country=selected?.name||countryValue.trim();
+    const [cities,currencies]=await Promise.all([loadCities(country),loadCurrencies(country)]);
+    renderCityOptions(cities,cityValue);
+    renderCurrencyOptions(currencies,currencyValue);
+    if(currencyValue)currencyInput.value=currencyValue;
+  }
 
   const refreshByCountry=async(resetCity=true)=>{
     const selected=resolveCountrySelection(countryInput.value);
@@ -381,8 +389,10 @@ function openSheet(html){
   $("#homePage").classList.add("hidden");$("#contentPage").classList.remove("hidden");
   $("#contentPage").innerHTML=html;$("#sheet").classList.add("hidden");
   $("#contentPage").scrollTo({top:0,behavior:"smooth"});
+  const heading=$("#contentPage").querySelector("h1,h2");
+  if(heading){heading.tabIndex=-1;requestAnimationFrame(()=>heading.focus({preventScroll:true}))}
 }
-const journeyCard=t=>`<div class="menu-card" onclick="showJourney('${t.id}')" role="button"><h3>${t.destinationCity||t.destinationCountry}, ${t.destinationCountry}</h3><p>${t.startDate} — ${t.endDate} · ${t.status}</p><div class="amount">${currencyMoney(t.budget,t.budgetCurrency)}</div><button class="inline-link">Open journey →</button></div>`;
+const journeyCard=t=>`<article class="menu-card"><h3>${t.destinationCity||t.destinationCountry}, ${t.destinationCountry}</h3><p>${t.startDate} — ${t.endDate} · ${t.status}</p><div class="amount">${currencyMoney(t.budget,t.budgetCurrency)}</div><button class="inline-link" onclick="showJourney('${t.id}')">Open journey →</button></article>`;
 const fraudReasonText={
   OUTSIDE_TRIP_DATE:"Outside your registered travel dates",OUTSIDE_DESTINATION:"Different from your trip destination",
   UNEXPECTED_CURRENCY:"Unusual currency for this destination",DUPLICATE_TRANSACTION:"Similar payment seen recently",
@@ -425,8 +435,8 @@ function cardOptions(){
   return state.cards.filter(c=>c.status==="ACTIVE").map(c=>`<option value="${c.id}">${c.cardType} ${c.maskedCardNumber} · main ${c.mainCurrency||"—"} · supports ${(c.supportedCurrencies||[]).join("/")||"none"}${c.overseasPaymentsEnabled?"":" · overseas off"}</option>`).join("");
 }
 async function openCreateTrip(){
-  const start=new Date(Date.now()+7*86400000).toISOString().slice(0,10);
-  const end=new Date(Date.now()+14*86400000).toISOString().slice(0,10);
+  const start="2026-10-01";
+  const end="2026-10-05";
   openSheet(`<button class="back" onclick="activate('trips')">← My journeys</button>
     <span class="eyebrow">PLAN AHEAD</span><h2>Create a trip</h2>
     <p>Add your destination and choose the card you plan to use.</p>
@@ -455,8 +465,7 @@ async function openCreateTrip(){
       <label>PREFERRED CARD<select name="preferredCardId" required>${cardOptions()}</select><small>The destination exchange rate is stored against this card when the journey is opened.</small></label>
       <button type="submit">Create trip</button>
     </form>`);
-  await bindTripReferenceControls({preferCountryMainstream:true});
-  disableBudgetArrowAdjust("#tripForm");
+  await bindTripReferenceControls({countryValue:"Japan",cityValue:"Tokyo",currencyValue:"USD"});
   $("#tripForm").onsubmit=createTrip;
 }
 async function createTrip(event){
@@ -536,17 +545,32 @@ window.deleteTrip=async id=>{
 
 async function load(){
   try{
-    updateGreeting();
-    const tripsResponse=await api("/api/travel/trips");
+    const [profile,tripsResponse,alertsResp,cardsResp,transactionsResp,casesResp]=await Promise.all([
+      api("/api/customer/profile"),api("/api/travel/trips"),api("/api/travel/alerts"),
+      api("/api/travel/cards"),api("/api/travel/transactions"),api("/api/travel/cases")
+    ]);
+    updateGreeting(profile);
     const trips=Array.isArray(tripsResponse?.data)?tripsResponse.data:[];
+    const alerts=Array.isArray(alertsResp?.data)?alertsResp.data:[];
+    const cards=Array.isArray(cardsResp?.data)?cardsResp.data:[];
+    const transactions=Array.isArray(transactionsResp?.data)?transactionsResp.data:[];
+    const cases=Array.isArray(casesResp?.data)?casesResp.data:[];
     trips.sort((a,b)=>(a.status==="COMPLETED")-(b.status==="COMPLETED")||a.startDate.localeCompare(b.startDate));
 
     if(!trips.length){
       state={
+        profile,
         trips:[],dashboard:{budget:0,spent:0,remaining:0,recentTransactions:[],currency:"USD",readinessStatus:"NOT_READY"},
-        alerts:[],cards:[],transactions:[],cases:[],tripMoney:{},tripReadiness:{}
+        alerts,cards,transactions,cases,tripMoney:{},tripReadiness:{}
       };
       $("#trips").innerHTML='<p class="empty">No trips yet. Tap "New trip" to start planning.</p>';
+      $(".journey-heading").style.display="none";
+      $("#trips").style.display="none";
+      $("#currentJourney").innerHTML='<div class="folio-empty"><h2>Your next journey starts here.</h2><p>Add a trip to prepare your cards, currency and travel budget.</p><button type="button" onclick="openCreateTrip()">Plan a trip</button></div>';
+      $("#currentJourney").onclick=null;
+      $("#currentJourney").onkeydown=null;
+      $("#currentJourney").removeAttribute("role");
+      $("#currentJourney").removeAttribute("tabindex");
       $("#paymentIssue").innerHTML="";
       $("#caseTracking").innerHTML="";
       $("#attentionSection").style.display="none";
@@ -558,21 +582,15 @@ async function load(){
     }
 
     const focusTrip=trips.find(t=>t.status!=="COMPLETED"&&t.status!=="CANCELLED")||trips[0];
-    const [dashboardResp,focusFx,alertsResp,cardsResp,transactionsResp,casesResp]=await Promise.all([
+    const [dashboardResp,focusFx]=await Promise.all([
       api(`/api/travel/trips/${focusTrip.id}/dashboard`),
-      api(`/api/travel/trips/${focusTrip.id}/exchange-rate?_=${Date.now()}`,{headers:{"Cache-Control":"no-cache"}}),
-      api("/api/travel/alerts"),api("/api/travel/cards"),api("/api/travel/transactions"),api("/api/travel/cases")
+      api(`/api/travel/trips/${focusTrip.id}/exchange-rate?_=${Date.now()}`,{headers:{"Cache-Control":"no-cache"}})
     ]);
     const dashboard={
       budget:0,spent:0,remaining:0,recentTransactions:[],currency:"USD",readinessStatus:"NOT_READY",
       ...(dashboardResp||{})
     };
     dashboard.recentTransactions=Array.isArray(dashboard.recentTransactions)?dashboard.recentTransactions:[];
-    const alerts=Array.isArray(alertsResp?.data)?alertsResp.data:[];
-    const cards=Array.isArray(cardsResp?.data)?cardsResp.data:[];
-    const transactions=Array.isArray(transactionsResp?.data)?transactionsResp.data:[];
-    const cases=Array.isArray(casesResp?.data)?casesResp.data:[];
-
     const upcoming=trips.filter(t=>t.status!=="COMPLETED"&&t.status!=="CANCELLED");
     const tripMoney=Object.fromEntries(await Promise.all(upcoming.map(async t=>{
       if(t.id===focusTrip.id)return [t.id,{dashboard,fx:focusFx}];
@@ -584,14 +602,31 @@ async function load(){
       try{return [t.id,await api(`/api/travel/trips/${t.id}/readiness`)];}
       catch{return [t.id,null];}
     })));
-    state={trips,dashboard,alerts,cards,transactions,cases,tripMoney,tripReadiness};
-    $("#trips").innerHTML=(displayedTrips.length?displayedTrips.map(t=>`<article class="trip" role="button" tabindex="0" onclick="showJourney('${t.id}')">
-      <span class="tag">${t.status}</span><span class="arrow">→</span>
+    state={profile,trips,dashboard,alerts,cards,transactions,cases,tripMoney,tripReadiness};
+    const focusReadiness=tripReadiness[focusTrip.id];
+    const readinessLabel=focusReadiness?.status==="READY"?"Ready to travel":focusReadiness?.status==="ACTION_REQUIRED"?"Action required":"Check readiness";
+    const destination=escapeHtml(focusTrip.destinationCity||focusTrip.destinationCountry);
+    $("#currentJourney").innerHTML=`<div class="folio-meta"><span>Current journey</span><span class="folio-status">${readinessLabel}</span></div>
+      <div class="folio-route"><strong>${destination}</strong><i aria-hidden="true"></i></div>
+      <p class="folio-dates">${focusTrip.startDate} — ${focusTrip.endDate} · ${escapeHtml(focusTrip.destinationCountry)}</p>
+      <div class="folio-bottom"><div class="folio-budget"><small>Available for this trip</small><b>${currencyMoney(dashboard.remaining,focusTrip.budgetCurrency)}</b></div>
+      <div class="folio-readiness"><small>Preferred card</small><b>${escapeHtml(cards.find(c=>c.id===focusTrip.preferredCardId)?.maskedCardNumber||"Review card")}</b></div></div>`;
+    $("#currentJourney").onclick=()=>showJourney(focusTrip.id);
+    $("#currentJourney").onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();showJourney(focusTrip.id)}};
+    $("#currentJourney").setAttribute("role","button");
+    $("#currentJourney").tabIndex=0;
+    const otherTrips=displayedTrips.filter(t=>t.id!==focusTrip.id);
+    $(".journey-heading").style.display=otherTrips.length?"flex":"none";
+    $("#trips").style.display=otherTrips.length?"flex":"none";
+    $("#trips").innerHTML=(otherTrips.length?otherTrips.map(t=>`<button type="button" class="trip" onclick="showJourney('${t.id}')">
+      <span class="tag">${t.status==="ACTIVE"?"IN PROGRESS":t.status}</span><span class="arrow">→</span>
       <h3>${t.destinationCity}, ${t.destinationCountry}</h3>
       <p>${t.startDate} — ${t.endDate} · ${currencyMoney(t.budget,t.budgetCurrency)}</p>
-      ${readinessBadge(t.id)}
       ${state.tripMoney[t.id]?`<small class="trip-local">Remaining ${localRemaining(state.tripMoney[t.id].dashboard,state.tripMoney[t.id].fx)}</small>`:""}
-    </article>`).join(""):'<p class="empty">No upcoming journeys yet.</p>');
+    </button>`).join(""):"");
+    const displayCurrency=(focusTrip.budgetCurrency||dashboard.currency||"USD").toUpperCase();
+    const displayDashboard={...dashboard,currency:displayCurrency};
+    const convertedRemaining=localRemaining(displayDashboard,focusFx,true);
 
     const failed=dashboard.recentTransactions.find(t=>t.status==="DECLINED"&&t.failureCode==="NETWORK_ERROR")||dashboard.recentTransactions.find(t=>t.status==="DECLINED");
     const featuredByHero=renderHomeAssistant(failed);
@@ -618,10 +653,11 @@ function localRemaining(d,fx,approx=false){
   else return "";
   return `${approx?"≈ ":""}${currencyMoney(usd,"USD")} USD`;
 }
-function updateGreeting(){
+function updateGreeting(profile=state.profile){
   const hour=new Date().getHours();
   const greeting=hour<5?"Welcome back":hour<12?"Morning":hour<18?"Afternoon":"Evening";
-  $("#welcomeTitle").textContent=`${greeting}, Jessie.`;
+  const firstName=(profile?.displayName||"Traveller").trim().split(/\s+/)[0];
+  $("#welcomeTitle").textContent=`${greeting}, ${firstName}.`;
 }
 const caseCard=c=>`<div class="case-card ${c.status==="RESOLVED"?"case-resolved":""}" onclick="showCase('${c.id}')" role="button"><div class="case-top"><span>${c.status.replaceAll("_"," ")}</span><b>${c.id}</b></div><h3>${c.title}</h3><p>${c.currentUpdate}</p><small>Updated ${new Date(c.updatedAt).toLocaleString()}</small><div class="case-progress"><i></i><i class="${c.status!=="SUBMITTED"?"done":""}"></i><i class="${c.status==="RESOLVED"?"done":""}"></i></div></div>`;
 window.showCases=()=>{
@@ -1083,7 +1119,7 @@ function renderTransactionsPage(){
   const colors=["#0d6b4b","#d5f16b","#e7a765","#6da7a0","#8b7cad","#d77a67","#9ba49e"];let cursor=0;
   const stops=entries.map((e,i)=>{const start=cursor;cursor+=e[1]/total*100;return `${colors[i%colors.length]} ${start}% ${cursor}%`}).join(",");
   const top=entries[0],observation=declined.length?`${declined.length} payment${declined.length>1?"s":""} need attention. Each has a bank-guided resolution path.`:top?`${top[0]} is your largest travel spending category at ${Math.round(top[1]/total*100)}%.`:"Your travel spending insights will appear after the first purchase.";
-  openSheet(`<div class="page-title"><span class="eyebrow">YOUR TRAVEL MONEY</span><h1>Payments</h1></div>
+  openSheet(`<div class="page-title"><span class="eyebrow">YOUR TRAVEL MONEY</span><h1>Wallet</h1></div>
     <div class="spending-advice"><span class="eyebrow">BANK INSIGHT</span><b>${observation}</b></div>
     <div class="transaction-summary"><div><small>TOTAL SPENT</small><b>${money(total)}</b></div><div><small>APPROVED</small><b>${approved.length}</b></div><div><small>DECLINED</small><b>${declined.length}</b></div></div>
     <div class="chart-wrap"><div class="pie-chart" style="background:conic-gradient(${stops||"#dfe3dd 0 100%"})"></div><div class="chart-legend">${entries.slice(0,7).map((e,i)=>`<div><i style="background:${colors[i%colors.length]}"></i><span>${e[0]} · ${Math.round(e[1]/total*100)}%</span></div>`).join("")}</div></div>
@@ -1111,9 +1147,12 @@ function physicalCard(c,index){
   </article>`;
 }
 function renderProfilePage(){
-  openSheet(`<div class="page-title"><span class="eyebrow">YOUR BANKING PROFILE</span><h1>Profile</h1></div>
-    <div class="profile-header"><div class="profile-avatar">JH</div><div><h3>Jessie Han</h3><p>Customer · 001 · Secure session active</p></div></div>
-    <section class="section-head profile-section-head"><h2>Your cards</h2><small class="swipe-hint">Swipe →</small></section>
+  const profile=state.profile||{customerId:"",displayName:"Traveller"};
+  const initials=profile.displayName.trim().split(/\s+/).map(part=>part[0]).join("").slice(0,2).toUpperCase();
+  const customerNumber=(profile.customerId.match(/\d+$/)||[""])[0];
+  openSheet(`<div class="page-title"><span class="eyebrow">CARDS AND PROTECTION</span><h1>Safety</h1></div>
+    <div class="profile-header"><div class="profile-avatar">${escapeHtml(initials)}</div><div><h3>${escapeHtml(profile.displayName)}</h3><p>Customer · ${escapeHtml(customerNumber)} · Secure session active</p></div></div>
+    <section class="section-head profile-section-head"><h2>Travel cards</h2><small class="swipe-hint">Swipe →</small></section>
     <div class="card-wallet">${state.cards.map(physicalCard).join("")}</div>
     <section class="section-head profile-section-head"><h2>Test a payment</h2></section>
     <div class="payment-test-launch">
@@ -1244,9 +1283,11 @@ const fraudDemo=$("#fraudDemo");
 if(fraudDemo)fraudDemo.onclick=async()=>{
   const button=$("#fraudDemo");button.classList.add("loading");
   try{
+    const demoCard=state.cards.find(card=>card.status==="ACTIVE");
+    if(!demoCard)throw new Error("No active card is available for this customer.");
     const id=`txn-demo-${Date.now()}`;
     await api("/api/travel/transactions/events",{method:"POST",body:JSON.stringify({
-      transactionId:id,customerId:"customer-001",cardId:"card-002",merchantName:"Paris Luxury Boutique",
+      transactionId:id,customerId:state.profile.customerId,cardId:demoCard.id,merchantName:"Paris Luxury Boutique",
       merchantCountry:"France",merchantCity:"Paris",merchantCategory:"LUXURY",originalAmount:1800,
       originalCurrency:"USD",transactionTime:"2026-08-16T14:30:00Z",transactionType:"PURCHASE",status:"APPROVED"
     })});
@@ -1294,7 +1335,7 @@ window.showStepUpPin=()=>openSheet(`<button class="back" onclick="secureCardRequ
 window.showStepUpSms=()=>openSheet(`<button class="back" onclick="secureCardRequest(pendingStepUp.action,pendingStepUp.resourceId,pendingStepUp.path,pendingStepUp.options,pendingStepUp.onSuccess)">← Verification options</button><span class="eyebrow">TEXT MESSAGE</span><h2>Enter the security code</h2><p>Sent to ••• ••• 0188. Demo code: <b>246810</b></p><div class="auth-code"><input id="stepSms" maxlength="6" inputmode="numeric"></div><button class="bank-primary" onclick="verifyStepUp('SMS_OTP',$('#stepSms').value)">Verify and continue</button>`);
 function showAuth(){authToken="";localStorage.removeItem("traveller_access_token");$("#authGate").classList.remove("hidden")}
 function preferredAuth(c){
-  authChallenge=c.challengeId;$("#authBody").innerHTML=`<span class="eyebrow">RECOMMENDED</span><h2>Verify on this device</h2>
+  authChallenge=c.challengeId;$("#authBody").innerHTML=`<span class="eyebrow">RECOMMENDED</span><h2 id="authTitle">Verify on this device</h2>
     <p>Use Face ID or your device passkey. No text message is needed.</p>
     <button class="auth-method preferred" onclick="verifyTrustedDevice()"><b>Continue with Face ID</b><small>Fastest · phishing-resistant in production</small></button>
     <button class="auth-link" onclick="showAlternativeAuth('${c.maskedPhone}')">Use another verification method</button>`;
@@ -1302,7 +1343,7 @@ function preferredAuth(c){
 async function startAuth(){
   const name=$("#authCustomer").value.trim();
   if(!name){toast("Enter your name");return}
-  try{preferredAuth(await api("/api/auth/start",{method:"POST",body:JSON.stringify({customerId:"customer-001"})}))}
+  try{preferredAuth(await api("/api/auth/start",{method:"POST",body:JSON.stringify({displayName:name})}))}
   catch(e){toast(e.message)}
 }
 window.verifyTrustedDevice=()=>verifyAuth("TRUSTED_DEVICE","trusted-device-demo");
@@ -1312,11 +1353,11 @@ window.verifyAuth=async(method,credential)=>{
     authToken=result.accessToken;localStorage.setItem("traveller_access_token",authToken);$("#authGate").classList.add("hidden");toast("Identity verified securely");load();
   }catch(e){toast(e.message)}
 };
-window.showAlternativeAuth=masked=>{$("#authBody").innerHTML=`<button class="auth-link" onclick="restartAuth()">← Back</button><h2>Other ways to verify</h2>
+window.showAlternativeAuth=masked=>{$("#authBody").innerHTML=`<button class="auth-link" onclick="restartAuth()">← Back</button><h2 id="authTitle">Other ways to verify</h2>
   <button class="auth-method preferred" onclick="showPinEntry()"><b>Banking App PIN</b><small>Works without mobile signal</small></button>
   <button class="auth-method" onclick="sendSmsCode()"><b>Text message</b><small>Send a one-time code to ${masked}</small></button>`};
-window.showPinEntry=()=>{$("#authBody").innerHTML=`<button class="auth-link" onclick="restartAuth()">← Back</button><h2>Enter App PIN</h2><p>For this demo, use <b>2580</b>.</p><div class="auth-code"><input id="pinCode" maxlength="4" inputmode="numeric" autocomplete="one-time-code"></div><button class="bank-primary" onclick="verifyAuth('APP_PIN',$('#pinCode').value)">Verify PIN</button>`};
-window.sendSmsCode=async()=>{try{const sms=await api(`/api/auth/sms?challengeId=${authChallenge}`,{method:"POST"});$("#authBody").innerHTML=`<button class="auth-link" onclick="restartAuth()">← Back</button><h2>Enter text message code</h2><p>Code sent to ${sms.maskedPhone}. Demo code: <b>${sms.demoCode}</b></p><div class="auth-code"><input id="smsCode" maxlength="6" inputmode="numeric" autocomplete="one-time-code"></div><button class="bank-primary" onclick="verifyAuth('SMS_OTP',$('#smsCode').value)">Verify code</button>`}catch(e){toast(e.message)}};
+window.showPinEntry=()=>{$("#authBody").innerHTML=`<button class="auth-link" onclick="restartAuth()">← Back</button><h2 id="authTitle">Enter App PIN</h2><p>For this demo, use <b>2580</b>.</p><div class="auth-code"><input id="pinCode" maxlength="4" inputmode="numeric" autocomplete="one-time-code"></div><button class="bank-primary" onclick="verifyAuth('APP_PIN',$('#pinCode').value)">Verify PIN</button>`};
+window.sendSmsCode=async()=>{try{const sms=await api(`/api/auth/sms?challengeId=${authChallenge}`,{method:"POST"});$("#authBody").innerHTML=`<button class="auth-link" onclick="restartAuth()">← Back</button><h2 id="authTitle">Enter text message code</h2><p>Code sent to ${sms.maskedPhone}. Demo code: <b>${sms.demoCode}</b></p><div class="auth-code"><input id="smsCode" maxlength="6" inputmode="numeric" autocomplete="one-time-code"></div><button class="bank-primary" onclick="verifyAuth('SMS_OTP',$('#smsCode').value)">Verify code</button>`}catch(e){toast(e.message)}};
 window.restartAuth=()=>{$("#authBody").innerHTML=`<h2 id="authTitle">Welcome back</h2><p>Verify your identity to open Travel Assistant.</p><label class="auth-label" for="authCustomer">YOUR NAME</label><input class="auth-customer" id="authCustomer" value="Jessie Han" autocomplete="name"><button class="bank-primary" id="authStart">Continue securely</button>`;$("#authStart").onclick=startAuth};
 window.signOut=async()=>{try{if(authToken)await api("/api/auth/logout",{method:"POST"})}catch(e){}showAuth();restartAuth()};
 $("#authStart").onclick=startAuth;
