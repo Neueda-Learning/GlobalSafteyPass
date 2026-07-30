@@ -59,3 +59,10 @@ docker compose up --build
 ```
 
 This starts MySQL and the application on port `8080`.
+
+## Test Users
+The following users are available for testing:
+- Jessie Han
+- Milly Li
+
+*Note: Attempting to log in with "Joanne Wang" or "Molly Yang" will return a "user not found" error.*
